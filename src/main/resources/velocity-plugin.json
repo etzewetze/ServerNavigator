@@ -1,0 +1,10 @@
+{
+  "id": "servernavigator",
+  "name": "ServerNavigator",
+  "version": "1.0.0",
+  "description": "Gemeinsames Aufwecken von AMP-Servern und automatischer Serverwechsel",
+  "url": "https://github.com/etzewetze/ServerNavigator",
+  "authors": ["etzewetze"],
+  "dependencies": [],
+  "main": "io.github.etzewetze.servernavigator.ServerNavigatorPlugin"
+}
