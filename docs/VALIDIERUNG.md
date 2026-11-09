@@ -11,6 +11,15 @@ Maven-Berichte liegen nach dem Build unter `target/surefire-reports/`. Das Relea
 - TOML, JSON und POM geparst; Workflow-Shellblöcke mit `bash -n` geprüft; `git diff --check` ohne Befund.
 - Die Arbeitsumgebung benötigt einen eigenen temporären Pfad und einen Umgebungs-Proxy für Maven. Diese lokalen Pfade/Proxy-Einstellungen sind kein Bestandteil des Projekts und werden nicht ausgeliefert.
 
+## Zusätzlich nach Veröffentlichung geprüft
+
+- GitHub Actions hat `clean verify`, Paketprüfung und Veröffentlichung erfolgreich abgeschlossen; Release **v1.0.0** enthält die installierbare JAR, Quellen, Konfiguration, Testberichte und Prüfsummen.
+- Die veröffentlichte `ServerNavigator-1.0.0.jar` erneut heruntergeladen und gegen `SHA256SUMS` geprüft: **82faf24f41f9c97449ad70d9f48a5de6153d54542aa907682ff8d24044c97b68**.
+- Offizielle **Velocity 4.3.2-SNAPSHOT Build 48** (`git-c80f44fb-b48`) heruntergeladen und deren offizielle SHA-256-Prüfsumme geprüft. Ein isolierter Proxy auf `127.0.0.1` mit fünf registrierten Testadressen hat das Plugin **1.0.0 erfolgreich geladen und initialisiert**.
+- Auf diesem laufenden Proxy: `servernavigator status` zeigt alle fünf Ziele; `status survival` funktioniert. Ungültiger Reload mit negativem Cooldown wird abgelehnt und die alte Konfiguration bleibt aktiv.
+- Gültiger Reload mit Aliaswechsel `surv` → `sv`: neuer Alias wird erkannt, alter Alias ist entfernt. Anschließend Originalkonfiguration wiederhergestellt, gültigen Reload erneut bestätigt und Proxy sauber beendet.
+- Dieser Proxy-Test verwendet ausschließlich lokale Testadressen, keine laufenden Minecraft-Backends und keine AMP-Instanz. Er belegt das Laden/Initialisieren auf der exakten Zielversion und die Verwaltungsbefehle; keine echten Spielerwechsel oder gerenderte Client-Anzeigen.
+
 ## Automatisiert abgedeckt
 
 - Gemeinsamer Cooldown und identische Alias-Handler, unveränderte abgewiesene Eingaben.
@@ -27,7 +36,7 @@ Maven-Berichte liegen nach dem Build unter `target/surefire-reports/`. Das Relea
 
 ## Noch mit laufendem Netzwerk zu prüfen
 
-1. Auf **Velocity 4.3.2 Build 48 / Temurin 25** laden. Kompilierung gegen API 4.3.0 ersetzt diesen Laufzeittest nicht.
+1. Im tatsächlichen Netzwerk mit den echten registrierten Backend-Adressen, vorhandenem Permission-Provider und weiteren Proxy-Plugins installieren. Der lokale Test auf der exakten Velocity-Version ersetzt diese Netzwerk-Integration nicht.
 2. AMP schlafen lassen, tatsächliche Startmeldung mit den Regex abgleichen; erst ein Spieler, dann mehrere gleichzeitige Wartende. Kein Spieler darf wegen AMP-Startablehnungen vom bisherigen Backend getrennt werden.
 3. Bereites Ziel: sofortiger Wechsel, unabhängig von Cooldown und Startschätzung.
 4. AMP-Timer: fünf Minuten nach letztem Spieler und zwei Minuten nach ungenutztem Wake. Abbruch beendet Prüfungen; kein Keepalive.
