@@ -9,7 +9,7 @@ import net.kyori.adventure.bossbar.BossBar;
 
 /** Immutable, fully validated configuration. Durations use milliseconds. */
 public record NavigatorConfig(long cooldown, long pollInterval, long maxWait, long attemptTimeout,
-                              int maxAttempts, int transientRetries, Map<String, Backend> servers,
+                              int maxAttempts, int networkRetries, Map<String, Backend> servers,
                               Map<String, String> messages, List<Pattern> startingPatterns,
                               List<Pattern> terminalPatterns) {
     public NavigatorConfig {
@@ -20,7 +20,7 @@ public record NavigatorConfig(long cooldown, long pollInterval, long maxWait, lo
         return servers.values().stream().filter(s -> s.velocityName().equalsIgnoreCase(name)).findFirst().orElse(null);
     }
     public enum Mode { BOSSBAR, TITLE, ACTIONBAR, CHAT, NONE }
-    public enum WakeType { AMP_LOGIN, HTTP }
+    public enum WakeType { CONNECTION, HTTP }
     public record Wake(WakeType type, URI url, String tokenEnvironment, String body) { }
     public record Backend(String id, String velocityName, String displayName, String command,
                           List<String> aliases, boolean permissionRequired, String permission,
@@ -34,7 +34,8 @@ public record NavigatorConfig(long cooldown, long pollInterval, long maxWait, lo
                           BossBar.Color color, BossBar.Overlay overlay,
                           long fadeIn, long stay, long fadeOut,
                           String bossbar, String title, String subtitle, String actionbar, String chat,
-                          String bossbarLonger, String titleLonger, String actionbarLonger, String chatLonger,
+                          String bossbarLonger, String titleLonger, String subtitleLonger, String actionbarLonger, String chatLonger,
+                          boolean waitChatEnabled, String waitChat,
                           String checking, String starting, String longer, String connecting) {
         public Display { modes = Set.copyOf(modes); }
     }

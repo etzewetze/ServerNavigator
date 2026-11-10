@@ -1,50 +1,45 @@
-# Validierung
+# Validierung von ServerNavigator 1.1.0
 
-Maven-Berichte liegen nach dem Build unter `target/surefire-reports/`. Das Release enthält den im erfolgreichen Build erzeugten Bericht als ZIP sowie Commit-ID, Testanzahl und Laufzeitumgebung in `BUILD.txt`.
+## Automatisierte Prüfungen
 
-## Tatsächlich lokal ausgeführt am 9. November 2026
+JUnit-Testfälle decken die folgenden Verhaltensweisen ab. Maven schreibt Ergebnisse nach `target/surefire-reports/`; das Release enthält die im erfolgreichen Build erzeugten Berichte sowie Commit-ID und Laufzeitumgebung.
 
-- `clean verify` mit **Eclipse Temurin 25.0.5+8** und **Apache Maven 3.9.11**: erfolgreich.
-- **35 JUnit-Tests**, **0 Fehler**, **0 fehlgeschlagene Tests**, **0 übersprungen**.
-- 18 Produktions- und vier Test-Quelldateien gegen die offizielle **Velocity API 4.3.0** kompiliert.
-- Installierbare Fat-JAR und Sources-JAR erzeugt. JAR-Inhalt geprüft: Plugin-Metadaten und Beispielkonfiguration vorhanden, TOML-Parser isoliert, Velocity-/Adventure-Klassen nicht mitgeliefert.
-- TOML, JSON und POM geparst; Workflow-Shellblöcke mit `bash -n` geprüft; `git diff --check` ohne Befund.
-- Die Arbeitsumgebung benötigt einen eigenen temporären Pfad und einen Umgebungs-Proxy für Maven. Diese lokalen Pfade/Proxy-Einstellungen sind kein Bestandteil des Projekts und werden nicht ausgeliefert.
+- Gemeinsamer Cooldown, unveränderte Wiederholungen, Aliase mit identischem Handler und sofortige automatische Verbindung ohne Mindestwartezeit.
+- Gemeinsamer Vorgang bei mehreren gleichzeitigen Spielern, einschließlich paralleler Threads.
+- Permission-Prüfung vor Start und Verbindung, Entzug während des Wartens sowie direkte Ziel-Zugriffskontrolle.
+- Cancel, Ersetzung, unabhängiger Wechsel, Disconnect, Reload, Shutdown, Fristen und späte Antworten.
+- Nicht erreichbare Backends ohne besonderen Startdienst/Startmeldung; begrenzte Netzwerk-Wiederholungen und korrektes Zurücksetzen des Fehlerzählers.
+- Globale Standardzeit, konfigurierbare Überschreibung pro Server und Standardwert bei fehlender globaler Angabe.
+- Kurzer Title mit Timer im echten Subtitle; separater Chattext in Titel- und Bossbar-Modus, deaktivierbar und je Server überschreibbar.
+- Einmalige Chatbenachrichtigung trotz Ticks und Befehlscooldown-Wiederholungen.
+- Alle Newline-Formen, mehrzeiliger Chat, Formatvererbung beim Aufteilen, einzeilige Bars und deutsche Platzhalter-Aliase.
+- Abgelaufene Schätzung mit unveränderter Überschrift und verständlichem Ersatz für den Timer.
+- Abweisung von mehr als zwei Titelzeilen, auch bei indirekt eingefügtem mehrzeiligem Status.
+- Migration auf Format 2 mit exakter Sicherung, unveränderten Server-/Permission-/Befehlsdaten und sichtbaren neuen Anzeigevorlagen.
+- Keine Speicherung bei ungültiger Alt-Konfiguration oder zwischenzeitlich geändertem Dateiinhalt.
+- Keine fremden Befehlsüberschreibungen, Entfernen eigener alter Aliase und Rollback bei Registrierungsfehlern.
 
-## Zusätzlich nach Veröffentlichung geprüft
+## Ausgeführte Prüfungen am 10. November 2026
 
-- GitHub Actions hat `clean verify`, Paketprüfung und Veröffentlichung erfolgreich abgeschlossen; Release **v1.0.0** enthält die installierbare JAR, Quellen, Konfiguration, Testberichte und Prüfsummen.
-- Die veröffentlichte `ServerNavigator-1.0.0.jar` erneut heruntergeladen und gegen `SHA256SUMS` geprüft: **82faf24f41f9c97449ad70d9f48a5de6153d54542aa907682ff8d24044c97b68**.
-- Offizielle **Velocity 4.3.2-SNAPSHOT Build 48** (`git-c80f44fb-b48`) heruntergeladen und deren offizielle SHA-256-Prüfsumme geprüft. Ein isolierter Proxy auf `127.0.0.1` mit fünf registrierten Testadressen hat das Plugin **1.0.0 erfolgreich geladen und initialisiert**.
-- Auf diesem laufenden Proxy: `servernavigator status` zeigt alle fünf Ziele; `status survival` funktioniert. Ungültiger Reload mit negativem Cooldown wird abgelehnt und die alte Konfiguration bleibt aktiv.
-- Gültiger Reload mit Aliaswechsel `surv` → `sv`: neuer Alias wird erkannt, alter Alias ist entfernt. Anschließend Originalkonfiguration wiederhergestellt, gültigen Reload erneut bestätigt und Proxy sauber beendet.
-- Dieser Proxy-Test verwendet ausschließlich lokale Testadressen, keine laufenden Minecraft-Backends und keine AMP-Instanz. Er belegt das Laden/Initialisieren auf der exakten Zielversion und die Verwaltungsbefehle; keine echten Spielerwechsel oder gerenderte Client-Anzeigen.
+- Build mit **Temurin 25.0.5+8**, **Apache Maven 3.9.11** und offizieller **Velocity API 4.3.0**.
+- **56 Tests**, **0 Fehler**, **0 fehlgeschlagene Tests**, **0 übersprungen**; `clean verify` erfolgreich.
+- 22 Produktions- und sechs Testdateien kompiliert; installierbare JAR und Sources-JAR gebaut. Metadaten, Format-2-Konfiguration und isolierter TOML-Parser geprüft; keine Velocity-/Adventure-Klassen mitgeliefert.
+- Auf offizieller, anhand der SHA-256-Prüfsumme geprüfter **Velocity 4.3.2-SNAPSHOT Build 48** (`git-c80f44fb-b48`) mit fünf registrierten lokalen Testadressen erfolgreich geladen.
+- Die tatsächliche Format-1-Beispieldatei aus Release 1.0.0 wurde beim Start erfolgreich migriert. Sicherungsdatei byteinhaltlich geprüft; Serverzeiten und Provider-Konvertierung kontrolliert. Neues Title-/Subtitle-Layout und einmaliger Chattext stehen editierbar in der migrierten Datei.
+- Auf dem laufenden Proxy Status für alle fünf Ziele, gültigen Format-2-Reload, Wechsel der Modusauswahl zu BOSSBAR und Aliaswechsel `surv` → `sv` geprüft. Neuer Alias wurde erkannt, alter entfernt.
+- Ein ungültiger dreizeiliger Title wurde beim Reload abgewiesen; die bisherigen Befehle und Konfiguration blieben aktiv. Proxy anschließend beendet.
+- `git diff --check` ohne Befund; aktuelle Quellen und Dokumentation auf entfernte Anbieterbindungen geprüft.
 
-## Automatisiert abgedeckt
+Die Proxy-Prüfung nutzte ausschließlich lokale Testadressen ohne laufende Minecraft-Backends. Sie belegt keine echte Spieleraufnahme und keine gerenderte Anzeige im Spiel. Lokale Maven-Proxy-/Temporärpfade werden nicht mitgeliefert.
 
-- Gemeinsamer Cooldown und identische Alias-Handler, unveränderte abgewiesene Eingaben.
-- Ein Wake-Aufruf bei vielen Spielern, einschließlich paralleler Threads.
-- Automatische Verbindung innerhalb des laufenden Befehlscooldowns.
-- Kein Start ohne Permission, erneute Prüfung und Entwertung bei Entzug.
-- Direkte Ziel-Zugriffskontrolle in der Kernlogik, verwendet vom Plugin-Event-Adapter.
-- Cancel, Ersetzung, unabhängiger Wechsel, Disconnect, Reload, Shutdown und verspätete Antworten.
-- ServerConnectedEvent vor Future-Abschluss ohne doppelte Folgeanmeldung.
-- Abgelaufene Schätzung ohne negative Sekunden oder künstliche Freigabe.
-- Begrenzte Wiederholungen, Fehlerklassifikation und sichere Backend-Textkomponenten.
-- Beispielkonfiguration, unbekannte Ziele, Typen/Bereiche, Vererbung und Aliaskonflikte.
-- Fremde Befehle bleiben erhalten, alte eigene Aliase verschwinden, Registrierungs-Rollback.
+## Im tatsächlichen Netzwerk weiterhin erforderlich
 
-## Noch mit laufendem Netzwerk zu prüfen
+- Echte Spielerwechsel und Verbleib auf dem bisherigen Backend während abgewiesener Loginversuche.
+- Login zu einem zunächst nicht erreichbaren und anschließend unabhängig gestarteten Backend.
+- Verhalten mit tatsächlichem Permission-Provider sowie anderen Proxy-Plugins; direkte `/server`-Versuche ohne Ziel-Permission.
+- Kapazität, Whitelist, Wartungsplugins und Forwarding mit echten Ablehnungsnachrichten.
+- Anzeige im Minecraft-Client bei unterschiedlichen GUI-Skalierungen, Bildschirmgrößen und optionalen Resourcepacks. Komponententests ersetzen keinen Blick auf das gerenderte Spielbild.
+- Cancel und unabhängiger Wechsel während eines echten laufenden Logins. Die öffentliche API garantiert keine Rücknahme bereits zugelassener Logins.
+- Optionaler HTTPS-POST mit eigenem Dienst einschließlich Authentifizierung, 2xx, Ablehnung und Timeout.
 
-1. Im tatsächlichen Netzwerk mit den echten registrierten Backend-Adressen, vorhandenem Permission-Provider und weiteren Proxy-Plugins installieren. Der lokale Test auf der exakten Velocity-Version ersetzt diese Netzwerk-Integration nicht.
-2. AMP schlafen lassen, tatsächliche Startmeldung mit den Regex abgleichen; erst ein Spieler, dann mehrere gleichzeitige Wartende. Kein Spieler darf wegen AMP-Startablehnungen vom bisherigen Backend getrennt werden.
-3. Bereites Ziel: sofortiger Wechsel, unabhängig von Cooldown und Startschätzung.
-4. AMP-Timer: fünf Minuten nach letztem Spieler und zwei Minuten nach ungenutztem Wake. Abbruch beendet Prüfungen; kein Keepalive.
-5. LuckPerms: ohne Ziel-Permission Alias und `/server <name>` testen, kein Wake. Permission während des Starts entziehen, keine automatische Folgeanmeldung.
-6. Volles Backend, Whitelist, Wartungsplugin, Forwarding-Fehler, unerreichbarer Host und Portübergabe mit echten Ablehnungsgründen prüfen.
-7. Cancel/Ersetzung/Disconnect direkt vor Login testen; bereits zugelassene Logins unterliegen der in README dokumentierten API-Grenze.
-8. Alle Anzeigemodi im echten Client prüfen: Title-Fades, Farben, Chat-Intervalle, GUI-Skalierung und optionales Resourcepack.
-9. Ungültiger Reload erhält Snapshot und Wünsche; gültiger Reload beendet alte Wünsche und ersetzt eigene Aliase. Keine konkurrierende Alias-Übernahme durch andere Plugins.
-10. Optionalen HTTP-Provider mit eigener HTTPS-Brücke auf 2xx, 4xx/5xx, Token und Timeout prüfen. AMP-Standard benötigt diesen nicht.
-
-Kein Zugriff auf das private Minecraft-/AMP-Netzwerk des Betreibers wurde vorausgesetzt. Simulierte Resultate sind keine echten Minecraft-Logins.
+Ein isolierter Proxy mit registrierten Testadressen belegt das Laden des Plugins und Verwaltungsbefehle. Er ersetzt keine echten Backend-/Spieler- oder Client-Anzeigetests.

@@ -51,7 +51,7 @@ class ConfigurationTest {
             example.replace("cooldown-seconds = 15", "cooldown-second = 15"),
             example.replace("cooldown-seconds = 15", "cooldown-seconds = \"15\""),
             example.replace("poll-interval-ms = 2000", "poll-interval-ms = 0"),
-            example.replace("modes = [\"BOSSBAR\", \"TITLE\", \"ACTIONBAR\"]", "modes = [\"NONE\", \"TITLE\"]"),
+            example.replace("modes = [\"TITLE\"]", "modes = [\"NONE\", \"TITLE\"]"),
             example.replace("bossbar-color = \"PURPLE\"", "bossbar-color = \"#ff0000\""),
             example.replace("<red>Du hast dafür keine Berechtigung.</red>", "<red>Du hast dafür keine Berechtigung."))) {
             assertThrows(IllegalArgumentException.class, () -> load(invalid));
@@ -62,7 +62,29 @@ class ConfigurationTest {
         assertEquals(6, c.servers().size()); assertEquals("server.skyblock", c.servers().get("skyblock").permission());
     }
     @Test void externalHttpPlaceholderCannotAccidentallyBecomeActive() {
-        assertThrows(IllegalArgumentException.class, () -> load(example.replace("[servers.creative.wake]\ntype = \"AMP_LOGIN\"",
-            "[servers.creative.wake]\ntype = \"HTTP\"\nurl = \"https://AMP-BRIDGE-EXAMPLE.invalid/wake/creative\"")));
+        assertThrows(IllegalArgumentException.class, () -> load(example + "\n[servers.creative.wake]\ntype = \"HTTP\"\nurl = \"https://START-SERVICE-EXAMPLE.invalid/wake/creative\"\n"));
+    }
+    @Test void perServerWaitOverridesGlobalDefaultAndOmissionInheritsIt() throws Exception {
+        var c = load(example.replace("expected-startup-seconds = 30", "expected-startup-seconds = 42"));
+        assertEquals(42000, c.servers().get("lobby").expectedStartup());
+        assertEquals(42000, c.servers().get("testserver").expectedStartup());
+        assertEquals(60000, c.servers().get("survival").expectedStartup());
+        c = load(example.replace("# expected-startup-seconds = 20", "expected-startup-seconds = 20"));
+        assertEquals(20000, c.servers().get("testserver").expectedStartup());
+    }
+    @Test void defaultWaitIsThirtySecondsEvenWhenGlobalSettingIsAbsent() throws Exception {
+        var c = load(example.replace("expected-startup-seconds = 30\n", ""));
+        assertEquals(30000, c.servers().get("creative").expectedStartup());
+    }
+    @Test void waitTimeAndTitleLineCountsAreValidated() {
+        assertThrows(IllegalArgumentException.class, () -> load(example.replace("expected-startup-seconds = 30", "expected-startup-seconds = -1")));
+        assertThrows(IllegalArgumentException.class, () -> load(example + "\n[servers.lobby.display]\ntitle = 'A<newline/>B<newline/>C'\n"));
+        assertThrows(IllegalArgumentException.class, () -> load(example + "\n[servers.lobby.display]\nsubtitle = 'A<newline/>B'\n"));
+    }
+    @Test void multilineStatusCannotAddAnUnsupportedThirdTitleRow() {
+        assertThrows(IllegalArgumentException.class, () -> load(example + "\n[servers.testserver.display]\ntitle = '<status>'\nstatus-checking = 'A<newline/>B<newline/>C'\n"));
+    }
+    @Test void multilineStatusCannotMakeTheSubtitleMultiline() {
+        assertThrows(IllegalArgumentException.class, () -> load(example + "\n[servers.testserver.display]\nsubtitle = '<status>'\nstatus-starting = 'A<newline/>B'\n"));
     }
 }

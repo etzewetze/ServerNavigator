@@ -184,18 +184,43 @@ class NavigationEngineTest {
         assertEquals("rejected", p.messages.getLast()); assertEquals(Component.text("Server is full"), p.view().reason());
         now.set(2000); engine.tick(); assertEquals(1, p.futures.size()); assertEquals(0, engine.pendingCount());
     }
-    @Test void unknownNetworkErrorIsNeverInterpretedAsSleep() {
+    @Test void offlineServerCanBeWaitedForWithoutAnyPanelOrStartupMessage() {
         var p = new FakeClient(); engine.navigate(p, "survival"); p.result(0, NETWORK_ERROR);
-        assertEquals("network-error", p.messages.getLast()); assertEquals(0, engine.pendingCount());
+        assertEquals(1, engine.pendingCount());
+        assertEquals(Progress.Phase.CHECKING, engine.status("survival").getFirst().phase());
+        now.set(2000); engine.tick(); p.result(1, CONNECTED);
+        assertEquals("connected", p.messages.getLast()); assertEquals(0, engine.pendingCount());
+        assertEquals(1, wakeCalls.get("survival"));
     }
-    @Test void transientErrorsDuringConfirmedStartupAreBounded() {
-        var p = new FakeClient(); engine.navigate(p, "survival"); p.result(0, STARTING);
-        for (int i = 1; i <= 4; i++) { now.addAndGet(2000); engine.tick(); p.result(i, NETWORK_ERROR); }
-        assertEquals("network-error", p.messages.getLast()); assertEquals(0, engine.pendingCount()); assertEquals(5, p.futures.size());
+    @Test void networkRetriesAreBoundedEvenWithoutAnExplicitStartupResponse() {
+        createEngine(new NavigatorConfig(config.cooldown(), config.pollInterval(), config.maxWait(), config.attemptTimeout(),
+            config.maxAttempts(), 3, config.servers(), config.messages(), config.startingPatterns(), config.terminalPatterns()));
+        var p = new FakeClient(); engine.navigate(p, "survival"); p.result(0, NETWORK_ERROR);
+        for (int i = 1; i <= 3; i++) { now.addAndGet(2000); engine.tick(); p.result(i, NETWORK_ERROR); }
+        assertEquals("network-error", p.messages.getLast()); assertEquals(0, engine.pendingCount()); assertEquals(4, p.futures.size());
+    }
+    @Test void networkRetryCounterCanBeResetByARealStartupResponse() {
+        createEngine(new NavigatorConfig(config.cooldown(), config.pollInterval(), config.maxWait(), config.attemptTimeout(),
+            config.maxAttempts(), 3, config.servers(), config.messages(), config.startingPatterns(), config.terminalPatterns()));
+        var p = new FakeClient(); engine.navigate(p, "survival"); p.result(0, NETWORK_ERROR);
+        now.addAndGet(2000); engine.tick(); p.result(1, NETWORK_ERROR);
+        now.addAndGet(2000); engine.tick(); p.result(2, STARTING);
+        for (int i = 3; i <= 5; i++) { now.addAndGet(2000); engine.tick(); p.result(i, NETWORK_ERROR); }
+        assertEquals(1, engine.pendingCount(), "The recognised startup response must reset consecutive failures");
+        now.addAndGet(2000); engine.tick(); p.result(6, NETWORK_ERROR);
+        assertEquals("network-error", p.messages.getLast()); assertEquals(0, engine.pendingCount()); assertEquals(7, p.futures.size());
+    }
+    @Test void waitingChatIsRequestedOnlyOnceDespiteTicksAndCooldownRepeats() {
+        var p = new FakeClient(); engine.navigate(p, "survival"); p.result(0, NETWORK_ERROR);
+        for (int i = 1; i <= 3; i++) {
+            now.set(i * 2000); engine.tick(); p.result(i, NETWORK_ERROR); engine.navigate(p, "survival");
+        }
+        assertEquals(1, p.messages.stream().filter("queued"::equals).count());
+        assertEquals(3, p.messages.stream().filter("cooldown-pending"::equals).count());
     }
     @Test void connectionAttemptLimitIsIndependentOfTimeoutAndEstimate() {
         var c = new NavigatorConfig(config.cooldown(), config.pollInterval(), config.maxWait(), config.attemptTimeout(), 2,
-            config.transientRetries(), config.servers(), config.messages(), config.startingPatterns(), config.terminalPatterns());
+            config.networkRetries(), config.servers(), config.messages(), config.startingPatterns(), config.terminalPatterns());
         createEngine(c); var p = new FakeClient(); engine.navigate(p, "survival"); p.result(0, STARTING);
         now.set(2000); engine.tick(); p.result(1, STARTING); now.set(4000); engine.tick();
         assertEquals("attempt-limit", p.messages.getLast()); assertEquals(2, p.futures.size()); assertEquals(0, scheduler.live);
@@ -224,7 +249,7 @@ class NavigationEngineTest {
         var map = new HashMap<>(c.servers()); var s = map.get("survival");
         map.put(s.id(), new Backend(s.id(), s.velocityName(), s.displayName(), s.command(), s.aliases(), true,
             s.permission(), s.expectedStartup(), s.wake(), s.display()));
-        return new NavigatorConfig(c.cooldown(), c.pollInterval(), c.maxWait(), c.attemptTimeout(), c.maxAttempts(), c.transientRetries(),
+        return new NavigatorConfig(c.cooldown(), c.pollInterval(), c.maxWait(), c.attemptTimeout(), c.maxAttempts(), c.networkRetries(),
             map, c.messages(), c.startingPatterns(), c.terminalPatterns());
     }
 }

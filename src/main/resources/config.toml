@@ -1,37 +1,40 @@
-# ServerNavigator 1.0.0 – Konfiguration für Velocity 4.3.x / Java 25.
-# Kopie nach plugins/servernavigator/config.toml; /servernavigator reload übernimmt Änderungen.
-# Tabellen/Schlüssel sind streng validiert: Tippfehler lassen die bisherige Konfiguration aktiv.
-# Alle Zeiten sind ganze Zahlen; Einheit steht im Namen. Befehle ohne führenden Schrägstrich.
-# Alle fünf velocity-name-Werte müssen bereits in Velocity registriert sein.
-config-version = 1
+# ServerNavigator 1.1.0 – Velocity 4.3.x / Java 25.
+# Unabhängiges Plugin: kein bestimmter Hoster, kein bestimmtes Panel erforderlich.
+# Die Datei liegt im Proxy unter plugins/servernavigator/config.toml.
+# /servernavigator reload validiert alle Einstellungen, bevor sie aktiv werden.
+# Eine Datei im alten Format wird mit Sicherung auf Format 2 und das kompakte Layout umgestellt.
+config-version = 2
 
 [settings]
-# Normale Velocity-Permissions, z.B. durch LuckPerms. Pro Server überschreibbar.
+# Normale Proxy-Permissions, z.B. über LuckPerms. Jeder Server kann dies überschreiben.
 require-server-permissions = false
-# Ein gemeinsamer Cooldown je Spieler für ALLE Ziele und Aliase; kein Verbindungs-Countdown.
+# Ein gemeinsamer Befehlscooldown je Spieler über alle Ziele und Aliase.
 cooldown-seconds = 15
-# Nur bei wartenden Spielern wird geprüft. Kein Ping, kein TCP-Portscan, kein Dauerpolling.
-poll-interval-ms = 2000
-# Jeder Wunsch hat diese Frist; unabhängig von der Startschätzung oder weiteren Wartenden.
+# STANDARD-WARTEZEIT: Countdown-Schätzung für alle Server ohne eigenen Wert.
+# Kein künstliches Zurückhalten: erfolgreiche Verbindung immer sofort, auch vor Ablauf!
+expected-startup-seconds = 30
+# Tatsächliche maximale Wartefrist je Wunsch; unabhängig von der Countdown-Schätzung.
 max-wait-seconds = 180
-# Obergrenze pro Plugin-Versuch, auch HTTP-Request-Timeout. Bei Ablauf endet der Wunsch.
-# Velocity bietet öffentlich KEINEN individuellen Socket-Timeout je Verbindungsanfrage.
-# Zusätzlich advanced.connection-timeout / read-timeout in velocity.toml passend setzen (README).
+# Nur prüfen, wenn Spieler warten. Es werden echte asynchrone Logins statt Pings verwendet.
+poll-interval-ms = 2000
+# Plugin-Frist je Netzwerk-/Startversuch; HTTP setzt außerdem echte Netzwerk-Timeouts.
+# Velocity-Login-Timeouts zusätzlich in velocity.toml einstellen (siehe README).
 attempt-timeout-ms = 10000
-# Inklusive Erstversuch, pro Spieler/Wunsch. Startantworten zählen mit. Zusätzlich gilt max-wait.
+# Alle tatsächlichen Login-/Trigger-Versuche je Wunsch, einschließlich Erstversuch.
 max-connection-attempts = 100
-# Nur NACH bestätigter AMP-Startantwort/erfolgreichem HTTP-Trigger werden Netzwerkfehler
-# während der Portübergabe begrenzt wiederholt. Jeder andere Netzwerkfehler beendet den Wunsch.
-transient-retries = 3
-# Regex auf Klartext der Backend-Loginablehnung, case-insensitive. Unbekannte Meldung = Fehler.
-# AMP-Version/Sprache kann abweichen: tatsächliche AMP-Startmeldung hier präzise ergänzen.
-# Niemals '.*' eintragen. Whitelist, voll und Wartung haben über terminal-patterns Vorrang.
+# Erlaubte aufeinanderfolgende Netzwerkfehler, auch wenn kein Startdienst antwortet.
+# 0 beendet schon beim ersten Netzwerkfehler. Ein Fehler beweist keinen Schlafzustand.
+# Zusätzlich gelten max-connection-attempts und max-wait-seconds.
+network-retries = 100
+# Optionale erkannte Startantworten. Unbekannte echte Login-Ablehnungen sind terminal.
+# Regex, case-insensitive. Dies ist eine allgemeine Meldungsklassifikation, keine Panel-API.
 starting-patterns = [
   'server (?:is (?:currently )?)?(?:sleeping|starting|waking(?: up)?)',
   'server is being started',
   'server (?:wird (?:gerade )?gestartet|startet(?: gerade)?|schläft|wird aufgeweckt)',
   'waking (?:up )?(?:the )?server'
 ]
+# Diese Gründe haben immer Vorrang vor starting-patterns und werden nicht wiederholt.
 terminal-patterns = [
   'whitelist|white-listed|not whitelisted|nicht (?:auf|in) der whitelist',
   'server is full|server (?:ist )?voll|maximum number of players',
@@ -40,138 +43,139 @@ terminal-patterns = [
 ]
 
 [display]
-# Frei kombinieren: BOSSBAR, TITLE, ACTIONBAR, CHAT. NONE ausschließlich allein.
-# NONE unterdrückt laufende Anzeigen, nicht einzelne Fehler-/Befehlsantworten.
-modes = ["BOSSBAR", "TITLE", "ACTIONBAR"]
+# Gewünschte Standardansicht: TITLE oder BOSSBAR. Beide schicken die einmalige Chatnachricht.
+# Weiterhin kombinierbar: TITLE, BOSSBAR, ACTIONBAR, CHAT. NONE ausschließlich allein.
+# CHAT ist zusätzlicher wiederholter Status; für die einmalige Erklärung nicht erforderlich.
+modes = ["TITLE"]
 update-interval-ms = 500
 chat-interval-seconds = 10
-# Adventure/Vanilla-Farben, unabhängig von den MiniMessage-Textfarben:
-# PINK, BLUE, RED, GREEN, YELLOW, PURPLE, WHITE
+# Die folgende Nachricht kommt genau einmal pro neu angenommenem Wunsch, unabhängig von modes.
+# Cooldown-Wiederholungen und Anzeige-Updates schicken sie nicht erneut.
+wait-chat-enabled = true
+wait-chat = '<gray>Sobald der Server antwortet, wirst du teleportiert.</gray>'
+# Alle Texte sind MiniMessage. Platzhalter: <server>/<servername>, <seconds>/<zeit>,
+# <elapsed>, <cooldown>, <status>, <reason>, <count>, <waiters>, <attempts>.
+# TITLE besteht aus zwei echten Vanilla-Zeilen: title groß, subtitle kleiner darunter.
+title = '<server> <gold>Startet</gold>'
+subtitle = '<gray>~<seconds> Sekunden</gray>'
+# Alternativ ein Umbruch in title: '<server> Startet<newline/>~<zeit> Sekunden'
+# Die zweite Zeile ersetzt dann subtitle. Höchstens zwei Titelzeilen möglich.
+# Unterstützt: <newline>, <newline/>, <br>, echtes LF und literales \n.
+# Im Chat sind mehrere Zeilen möglich; Bossbar/Actionbar bleiben technisch einzeilig
+# und verbinden Umbrüche mit einem Leerzeichen. Keine frei skalierbare Vanilla-Schrift.
+bossbar = '<server> startet <gray>| ~<seconds> s</gray>'
+actionbar = '<server> startet <gray>| ~<seconds> s</gray>'
+chat = '<server> <gray>| <status> | voraussichtlich noch <seconds> Sekunden</gray>'
+# Nach Ende der Schätzung kein negativer Countdown und keine automatische Freigabe.
+title-longer = '<server> <gold>Startet</gold>'
+subtitle-longer = '<yellow>Start dauert länger …</yellow>'
+bossbar-longer = '<server> <yellow>| Start dauert länger …</yellow>'
+actionbar-longer = '<server> <yellow>| Start dauert länger …</yellow>'
+chat-longer = '<server> <yellow>| Start dauert länger …</yellow>'
+# Status wird nur eingefügt, wenn eine eigene Vorlage <status> verwendet.
+status-checking = 'Warte auf Antwort …'
+status-starting = 'startet'
+status-longer = 'Start dauert länger …'
+status-connecting = 'Verbindung wird hergestellt …'
+# Bossbar-Farbe separat vom Text: PINK, BLUE, RED, GREEN, YELLOW, PURPLE, WHITE.
 bossbar-color = "PURPLE"
-# PROGRESS, NOTCHED_6, NOTCHED_10, NOTCHED_12, NOTCHED_20
+# PROGRESS, NOTCHED_6, NOTCHED_10, NOTCHED_12, NOTCHED_20.
 bossbar-overlay = "PROGRESS"
-# Millisekunden. Bei kurzen Updates fade-in klein halten; stay >= update-interval empfohlen.
+# Title-Zeiten in Millisekunden; kurze fade-in verhindert Flackern bei Timer-Updates.
 title-fade-in-ms = 0
 title-stay-ms = 1100
 title-fade-out-ms = 200
-# MiniMessage mit geschlossenen Tags, Hexfarben, Farbverläufen, <font:namespace:key> usw.
-# Platzhalter in sämtlichen Nachrichtentexten:
-# <server>, <seconds> (Restschätzung, nie negativ), <elapsed> (seit gemeinsamem Erstversuch),
-# <cooldown>, <status>; zusätzlich <reason>, <count>, <waiters>, <attempts>.
-# <status> ist in status-*-Texten leer (keine Rekursion). Dynamische Inhalte sind Komponenten
-# oder unformatierte Werte und können keine MiniMessage-Tags einschleusen.
-bossbar = '<server> <gray>| <status> | voraussichtlich noch <seconds> Sekunden</gray>'
-title = '<gradient:#a78bfa:#38bdf8>~<seconds></gradient>'
-subtitle = '<server> <gray><status></gray>'
-actionbar = '<server> <gray>| <status> | ~<seconds> s</gray>'
-chat = '<server> <gray><status> – voraussichtlich noch <seconds> Sekunden.</gray>'
-# Abgelaufene Schätzung: keine scheinbar verbindliche 0-Sekunden-Versprechung.
-bossbar-longer = '<server> <yellow>| <status></yellow>'
-title-longer = '<yellow>…</yellow>'
-actionbar-longer = '<server> <yellow>| <status></yellow>'
-chat-longer = '<server> <yellow><status> Du wirst weiterhin automatisch verbunden.</yellow>'
-status-checking = 'Verbindung wird geprüft …'
-status-starting = 'startet – du wirst automatisch verbunden'
-status-longer = 'Start dauert länger …'
-status-connecting = 'Verbindung wird hergestellt …'
-# TITLE nutzt die feste Vanilla-Title-Schriftgröße. Andere Schriftarten/Grafik-Glyphen
-# können später per Resourcepack und <font:...> in Texten verwendet werden. Die gelieferten
-# Texte sind der normale, ohne Resourcepack nutzbare Fallback; keine frei skalierbare Schrift.
+# Normale Textdarstellung ohne Resourcepack. Eigene Fonts/Glyphen später über <font:...>.
 
 [messages]
-no-permission = '<red>Du hast dafür keine Berechtigung.</red>'
-player-only = '<red>Dieser Befehl kann nur von einem Spieler verwendet werden.</red>'
-unknown-server = '<red>Dieser Zielserver ist nicht konfiguriert oder nicht registriert.</red>'
-already-there = '<yellow>Du bist bereits auf <server>.</yellow>'
-no-current-server = '<red>Du musst bereits auf einem Spielserver sein, um hier zu warten.</red>'
-cooldown = '<yellow>Bitte warte noch <cooldown> Sekunden.</yellow>'
-cooldown-pending = '<yellow>Bitte warte noch <cooldown> Sekunden. Deine Verbindung zu <server> ist bereits vorgemerkt.</yellow>'
-already-pending = '<yellow>Deine Verbindung zu <server> ist bereits vorgemerkt.</yellow>'
-queued = '<gray>Verbindung zu <server> vorgemerkt. Du bleibst bis zum erfolgreichen Wechsel auf deinem bisherigen Server.</gray>'
-cancelled = '<gray>Dein Verbindungswunsch zu <server> wurde abgebrochen.</gray>'
-nothing-pending = '<gray>Du hast keinen aktiven Verbindungswunsch.</gray>'
-replaced = '<gray>Dein bisheriger Verbindungswunsch zu <server> wurde ersetzt.</gray>'
-timeout = '<red><server> hat die maximale Wartezeit überschritten. Bitte versuche es später erneut.</red>'
-attempt-timeout = '<red>Der Verbindungs-/Startversuch zu <server> antwortet nicht rechtzeitig. Der Wunsch wurde beendet.</red>'
-attempt-limit = '<red>Die maximale Anzahl an Verbindungsversuchen zu <server> wurde erreicht.</red>'
-rejected = '<red><server> hat die Verbindung abgelehnt: </red><reason>'
-network-error = '<red><server> ist wegen eines Netzwerkfehlers nicht erreichbar. Das ist kein eindeutiger Schlafstatus.</red>'
-start-error = '<red>Der Starttrigger für <server> ist fehlgeschlagen. </red><reason>'
-connection-cancelled = '<yellow>Die Verbindung zu <server> wurde durch eine Proxy-Regel abgebrochen.</yellow>'
-connection-busy = '<yellow>Ein anderer Verbindungsversuch läuft noch. Bitte versuche es später erneut.</yellow>'
-connected = '<green>Du bist jetzt mit <server> verbunden.</green>'
-independent-switch = '<gray>Dein alter Verbindungswunsch wurde wegen eines anderen Serverwechsels beendet.</gray>'
-reload-cancelled = '<gray>Dein Verbindungswunsch wurde wegen einer Konfigurationsänderung beendet.</gray>'
-reloaded = '<green>ServerNavigator: Konfiguration und Befehle wurden neu geladen.</green>'
-reload-failed = '<red>Reload abgelehnt; die bisherige Konfiguration bleibt aktiv: </red><reason>'
-usage = '<gray>/servernavigator cancel | /servernavigator status [server] | /servernavigator reload</gray>'
-status-idle = '<server> <gray>| kein aktiver Startvorgang, keine Wartenden; Online-Status wird nicht abgefragt.</gray>'
-status-active = '<server> <gray>| <status> | <elapsed> s | <count> Wartende: <waiters> | Versuche des aktuellen Spielers: <attempts></gray>'
-shutting-down = '<gray>ServerNavigator wird beendet; dein Verbindungswunsch wurde entfernt.</gray>'
+# Einzelne Befehlsantworten/Fehler; die einmalige Warteerklärung steht unter display.wait-chat.
+no-permission = "<red>Du hast dafür keine Berechtigung.</red>"
+player-only = "<red>Dieser Befehl kann nur von einem Spieler verwendet werden.</red>"
+unknown-server = "<red>Dieser Zielserver ist nicht konfiguriert oder nicht registriert.</red>"
+already-there = "<yellow>Du bist bereits auf <server>.</yellow>"
+no-current-server = "<red>Du musst bereits auf einem Spielserver sein, um hier zu warten.</red>"
+cooldown = "<yellow>Bitte warte noch <cooldown> Sekunden.</yellow>"
+cooldown-pending = "<yellow>Bitte warte noch <cooldown> Sekunden. Deine Verbindung zu <server> ist bereits vorgemerkt.</yellow>"
+already-pending = "<yellow>Deine Verbindung zu <server> ist bereits vorgemerkt.</yellow>"
+cancelled = "<gray>Dein Verbindungswunsch zu <server> wurde abgebrochen.</gray>"
+nothing-pending = "<gray>Du hast keinen aktiven Verbindungswunsch.</gray>"
+replaced = "<gray>Dein bisheriger Verbindungswunsch zu <server> wurde ersetzt.</gray>"
+timeout = "<red><server> hat die maximale Wartezeit überschritten. Bitte versuche es später erneut.</red>"
+attempt-timeout = "<red>Der Verbindungs-/Startversuch zu <server> antwortet nicht rechtzeitig. Der Wunsch wurde beendet.</red>"
+attempt-limit = "<red>Die maximale Anzahl an Verbindungsversuchen zu <server> wurde erreicht.</red>"
+rejected = "<red><server> hat die Verbindung abgelehnt: </red><reason>"
+network-error = "<red><server> antwortet nach den erlaubten Netzwerkversuchen nicht. Bitte versuche es später erneut.</red>"
+start-error = "<red>Der Starttrigger für <server> ist fehlgeschlagen. </red><reason>"
+connection-cancelled = "<yellow>Die Verbindung zu <server> wurde durch eine Proxy-Regel abgebrochen.</yellow>"
+connection-busy = "<yellow>Ein anderer Verbindungsversuch läuft noch. Bitte versuche es später erneut.</yellow>"
+connected = "<green>Du bist jetzt mit <server> verbunden.</green>"
+independent-switch = "<gray>Dein alter Verbindungswunsch wurde wegen eines anderen Serverwechsels beendet.</gray>"
+reload-cancelled = "<gray>Dein Verbindungswunsch wurde wegen einer Konfigurationsänderung beendet.</gray>"
+reloaded = "<green>ServerNavigator: Konfiguration und Befehle wurden neu geladen.</green>"
+reload-failed = "<red>Reload abgelehnt; die bisherige Konfiguration bleibt aktiv: </red><reason>"
+usage = "<gray>/servernavigator cancel | /servernavigator status [server] | /servernavigator reload</gray>"
+status-idle = "<server> <gray>| kein aktiver Startvorgang, keine Wartenden; Online-Status wird nicht abgefragt.</gray>"
+status-active = "<server> <gray>| <status> | <elapsed> s | <count> Wartende: <waiters> | Versuche des aktuellen Spielers: <attempts></gray>"
+shutting-down = "<gray>ServerNavigator wird beendet; dein Verbindungswunsch wurde entfernt.</gray>"
 
-# Neue Server: gesamten Serverblock kopieren, eindeutige ID/Befehle vergeben,
-# den velocity-name vorher in velocity.toml unter [servers] eintragen und Velocity neu starten.
-# display-name unterstützt MiniMessage; velocity-name ist ausschließlich der registrierte Name.
+# Die IDs und Befehle sind frei konfigurierbar. velocity-name MUSS in Velocity registriert sein.
+# Jeder zusätzliche Server erhält ohne eigenen expected-startup-seconds-Wert die Standardzeit.
 [servers.lobby]
 velocity-name = "lobby"
 display-name = '<#a78bfa>Lobby</#a78bfa>'
 command = "lobby"
 aliases = ["l", "hub"]
-expected-startup-seconds = 15
-# Optionale lokale Überschreibung der globalen Permission-Vorgabe:
+# Keine eigene Wartezeit: settings.expected-startup-seconds gilt.
 # require-permission = false
 # permission = "server.lobby"
-[servers.lobby.wake]
-type = "AMP_LOGIN"
 
 [servers.challenges]
 velocity-name = "challenges"
 display-name = '<#fbbf24>Challenges</#fbbf24>'
 command = "challenges"
 aliases = ["challenge", "ch"]
-expected-startup-seconds = 45
-[servers.challenges.wake]
-type = "AMP_LOGIN"
+# expected-startup-seconds = 45 # optional statt Standardzeit
 
 [servers.survival]
 velocity-name = "survival"
 display-name = '<#4ade80>Survival</#4ade80>'
 command = "survival"
 aliases = ["surv"]
-expected-startup-seconds = 60
-[servers.survival.wake]
-type = "AMP_LOGIN"
-# Einzelne Anzeigenwerte überschreiben; alle nicht genannten Werte werden global geerbt.
+expected-startup-seconds = 60 # eigene Wartezeit überschreibt den Standard
 [servers.survival.display]
 bossbar-color = "GREEN"
+# Alle Anzeigeeinstellungen können hier einzeln überschrieben werden, z.B.:
+# modes = ["BOSSBAR"]
+# wait-chat = '<gray>Sobald Survival antwortet, wirst du teleportiert.</gray>'
+# title = '<server> Startet'
+# subtitle = '<yellow>~<zeit> s</yellow>'
 
 [servers.creative]
 velocity-name = "creative"
 display-name = '<#38bdf8>Creative</#38bdf8>'
 command = "creative"
 aliases = ["cre"]
-expected-startup-seconds = 25
-[servers.creative.wake]
-type = "AMP_LOGIN"
+# Keine eigene Wartezeit: Standardzeit gilt.
 
 [servers.testserver]
 velocity-name = "testserver"
 display-name = '<#fb7185>Testserver</#fb7185>'
 command = "testserver"
 aliases = ["test"]
-expected-startup-seconds = 30
-# Beispiele optionaler Beschränkung (auskommentiert = globale Vorgabe):
+# expected-startup-seconds = 20 # optional statt Standardzeit
 # require-permission = true
 # permission = "servernavigator.testzugang"
-[servers.testserver.wake]
-type = "AMP_LOGIN"
 
-# ALTERNATIVE statt des jeweiligen AMP_LOGIN-wake-Blocks: implementierter HTTP-POST-Provider.
-# Dies ist KEIN erfundener AMP-Endpunkt. Eine eigene HTTP-Brücke muss Authentifizierung und
-# die versionsabhängige AMP-API/Sitzung behandeln; bestehendes AMP-Sleep benötigt dies NICHT.
+# Optionaler Starttrigger je Server; ohne wake-Block gilt CONNECTION.
+# CONNECTION sendet einen normalen Loginversuch. Ein vorhandener externer Dienst KANN
+# darauf reagieren. Ohne solchen Dienst startet das Plugin keinen Java-Prozess selbst.
+# [servers.testserver.wake]
+# type = "CONNECTION"
+
+# Alternativer, vollständig implementierter HTTPS-POST-Starttrigger:
 # [servers.testserver.wake]
 # type = "HTTP"
-# url = "https://AMP-BRIDGE-EXAMPLE.invalid/wake/testserver" # deutlich erkennbarer Platzhalter
-# token-environment = "SERVERNAVIGATOR_WAKE_TOKEN" # Bearer-Token aus Umgebung des Proxys
-# body = '{"server":"testserver"}'
-# HTTPS zwingend; keine Redirects, keine Wiederholung des POST, keine Secrets im Repository.
+# url = "https://START-SERVICE-EXAMPLE.invalid/wake/testserver" # echter Endpunkt erforderlich
+# token-environment = "SERVERNAVIGATOR_WAKE_TOKEN" # optionaler Bearer-Token aus Proxy-Umgebung
+# body = '{"server":"testserver"}' # wörtlicher JSON-Body, kein erfundener Panel-Endpunkt
+# Nur 2xx gilt als erfolgreicher Trigger, keine Redirects und keine POST-Wiederholung.

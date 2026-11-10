@@ -17,7 +17,7 @@ import io.github.etzewetze.servernavigator.config.ConfigLoader;
 import io.github.etzewetze.servernavigator.config.NavigatorConfig;
 import io.github.etzewetze.servernavigator.core.NavigationEngine;
 import io.github.etzewetze.servernavigator.core.Progress;
-import io.github.etzewetze.servernavigator.provider.AmpLoginWakeupProvider;
+import io.github.etzewetze.servernavigator.provider.ConnectionWakeupProvider;
 import io.github.etzewetze.servernavigator.provider.HttpWakeupProvider;
 import io.github.etzewetze.servernavigator.provider.VelocityLoginReadinessChecker;
 import io.github.etzewetze.servernavigator.velocity.CommandRegistry;
@@ -41,9 +41,10 @@ public final class ServerNavigatorPlugin {
     private final MessageRenderer renderer = new MessageRenderer();
     private final Map<UUID, VelocityClient> clients = new ConcurrentHashMap<>();
     private volatile NavigationEngine engine;
+    private volatile boolean stopping;
     private CommandRegistry registry;
-    private HttpWakeupProvider http;
-    private final AmpLoginWakeupProvider amp = new AmpLoginWakeupProvider();
+    private volatile HttpWakeupProvider http;
+    private final ConnectionWakeupProvider connectionWakeup = new ConnectionWakeupProvider();
     private final AdminCommand admin = new AdminCommand();
 
     @Inject public ServerNavigatorPlugin(ProxyServer proxy, Logger logger, @DataDirectory Path directory) {
@@ -57,24 +58,35 @@ public final class ServerNavigatorPlugin {
                 if (resource == null) throw new IOException("Eingebettete config.toml fehlt");
                 Files.copy(resource, path);
             }
-            NavigatorConfig initial = load();
+            ConfigLoader.Candidate candidate = load();
+            NavigatorConfig initial = candidate.config();
             registry = new CommandRegistry(this, proxy.getCommandManager()); registry.validate(initial);
             http = new HttpWakeupProvider(initial.attemptTimeout());
             engine = new NavigationEngine(initial, (action, interval) -> {
                 var task = proxy.getScheduler().buildTask(this, action).repeat(interval).schedule(); return task::cancel;
             }, () -> System.nanoTime() / 1_000_000,
-                backend -> backend.wake().type() == NavigatorConfig.WakeType.AMP_LOGIN ? amp : http,
+                backend -> backend.wake().type() == NavigatorConfig.WakeType.CONNECTION ? connectionWakeup : http,
                 new VelocityLoginReadinessChecker());
             registry.install(initial, admin, this::navigationCommand);
-            logger.info("ServerNavigator gestartet: {} Ziele; AMP-Login als Starttrigger.", initial.servers().size());
+            saveMigration(candidate);
+            logger.info("ServerNavigator gestartet: {} Ziele; unabhängige Verbindungsprüfung.", initial.servers().size());
         } catch (Exception error) {
             logger.error("ServerNavigator konnte nicht aktiviert werden. Konfiguration/Befehlskonflikte prüfen.", error);
             if (engine != null) engine.close(); engine = null;
             if (registry != null) registry.close(); if (http != null) http.close();
         }
     }
-    private NavigatorConfig load() throws IOException {
-        return new ConfigLoader().load(directory.resolve("config.toml"), name -> proxy.getServer(name).isPresent());
+    private ConfigLoader.Candidate load() throws IOException {
+        return new ConfigLoader().loadCandidate(directory.resolve("config.toml"), name -> proxy.getServer(name).isPresent());
+    }
+    private void saveMigration(ConfigLoader.Candidate candidate) {
+        if (!candidate.migrated()) return;
+        try {
+            Path backup = candidate.saveMigration(directory.resolve("config.toml"));
+            logger.info("Konfiguration auf Format 2 aktualisiert. Kompaktes Anzeige-Layout aktiviert; Sicherung: {}", backup.getFileName());
+        } catch (IOException failure) {
+            logger.warn("Die neue Konfiguration ist aktiv, konnte aber nicht gespeichert werden: {}", failure.getMessage());
+        }
     }
     private VelocityClient client(Player p) {
         return clients.computeIfAbsent(p.getUniqueId(), ignored -> new VelocityClient(p, proxy, () -> engine.config(), renderer));
@@ -97,14 +109,17 @@ public final class ServerNavigatorPlugin {
         if (current != null) source.sendMessage(renderer.render(current.config().messages().get(key), progress));
     }
     private synchronized void reload(CommandSource source) {
+        if (stopping || engine == null) return;
         try {
-            NavigatorConfig replacement = load(); registry.validate(replacement);
+            ConfigLoader.Candidate candidate = load();
+            NavigatorConfig replacement = candidate.config(); registry.validate(replacement);
             // Construct all resources first. The active snapshot is replaced only after successful
             // validation and command registration. Old requests are explicitly cancelled on commit.
             var nextHttp = new HttpWakeupProvider(replacement.attemptTimeout());
             try { registry.install(replacement, admin, this::navigationCommand); }
             catch (RuntimeException failure) { nextHttp.close(); throw failure; }
             var previousHttp = http; http = nextHttp; engine.reload(replacement); previousHttp.close();
+            saveMigration(candidate);
             send(source, "reloaded", Progress.basic(null));
         } catch (Exception error) {
             logger.warn("Konfigurations-Reload abgelehnt: {}", error.getMessage());
@@ -167,6 +182,7 @@ public final class ServerNavigatorPlugin {
         VelocityClient c = clients.remove(id); if (c != null) c.clearDisplay();
     }
     @Subscribe public synchronized void shutdown(ProxyShutdownEvent event) {
+        stopping = true;
         if (engine != null) engine.close();
         if (registry != null) registry.close();
         if (http != null) http.close();

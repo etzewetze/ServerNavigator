@@ -25,7 +25,7 @@ class ClassifierAndMessagesTest {
         try (var input = getClass().getResourceAsStream("/config.toml")) { Files.copy(input, path); }
         config = new ConfigLoader().load(path, s -> true);
     }
-    @Test void recognisedEnglishAndGermanAmpMessagesAreRetryable() {
+    @Test void recognisedEnglishAndGermanStartupMessagesAreRetryable() {
         for (String text : java.util.List.of("Server is starting, please wait!", "This server is currently sleeping. Waking up...",
             "Dieser Server wird gerade gestartet.", "Der Server startet gerade."))
             assertEquals(AttemptResult.Kind.STARTING, classifier.rejection(config, Component.text(text)).kind());

@@ -1,14 +1,14 @@
 # ServerNavigator
 
-Velocity-Plugin für gemeinsame Serverstarts mit **CubeCoders AMP**, automatischem Serverwechsel und Adventure-Anzeigen. Die Plugin-JAR gehört ausschließlich auf den Proxy. Ein Spieler wartet auf seinem bisherigen Backend; ein Limbo-Server wird nicht bereitgestellt.
+Unabhängiges Velocity-Plugin für einfache Serverwechsel, gemeinsame Wartelisten und konfigurierbare Adventure-Anzeigen. Es funktioniert mit dauerhaft laufenden Backends, manuell gestarteten Servern und optionalen externen Startdiensten. Die Plugin-JAR gehört ausschließlich auf den Proxy.
 
-Zielumgebung: **Velocity 4.3.2 Build 48, Temurin/Java 25** auf dem Proxy. Das Projekt verwendet die offizielle **Velocity API 4.3.0**, die dokumentierte stabile API dieser Versionslinie. Java 21–25 auf Backends ist für ein reines Proxy-Plugin unerheblich; der Proxy benötigt hier Java 25. Keine Velocity-Interna oder erfundene Start-API.
+Zielumgebung: **Velocity 4.3.2 Build 48 / Temurin 25**. Offizielle **Velocity API 4.3.0** und Adventure; keine Proxy-Interna. Die Java-Version der Backendserver ist für dieses Proxy-Plugin unerheblich.
 
-## Installation
+## Installation und Update auf 1.1.0
 
-1. Aus [Releases](https://github.com/etzewetze/ServerNavigator/releases) `ServerNavigator-1.0.0.jar` herunterladen. Nicht das `-sources.jar` installieren.
-2. Proxy stoppen, die JAR in dessen `plugins/` legen. Auf Backends wird keine JAR benötigt.
-3. Alle fünf Server unter `[servers]` in `velocity.toml` registrieren. Beispiel mit **anzupassenden** Adressen:
+1. [ServerNavigator-1.1.0.jar](https://github.com/etzewetze/ServerNavigator/releases/download/v1.1.0/ServerNavigator-1.1.0.jar) herunterladen.
+2. Proxy stoppen, alte Plugin-JAR entfernen und neue JAR in `plugins/` legen. Proxy neu starten. Ein Konfigurations-Reload tauscht keine laufende JAR aus.
+3. Alle konfigurierten Ziele müssen in `velocity.toml` unter `[servers]` registriert sein. Beispiel mit **anzupassenden** Adressen:
 
    ```toml
    [servers]
@@ -20,14 +20,113 @@ Zielumgebung: **Velocity 4.3.2 Build 48, Temurin/Java 25** auf dem Proxy. Das Pr
    try = ["lobby"]
    ```
 
-4. Proxy starten. `plugins/servernavigator/config.toml` wird angelegt. Unbekannte Ziele oder fremde Befehlskonflikte verhindern die Aktivierung mit verständlichem Logeintrag; fremde Befehle bleiben erhalten.
-5. AMP wie unten einrichten. Auf einem erreichbaren Aufenthaltsserver einloggen und `/survival` testen.
+4. `plugins/servernavigator/config.toml` bearbeiten und `/servernavigator reload` verwenden.
 
-Die mitgelieferte [config.toml](src/main/resources/config.toml) ist vollständig kommentiert. Sie kann vor dem ersten Start direkt nach `plugins/servernavigator/config.toml` kopiert werden. ServerNavigator registriert keine Backend-Adressen selbst.
+Eine neue Installation erhält die [vollständig kommentierte Beispielkonfiguration](src/main/resources/config.toml). Eine bestehende Datei aus Version 1.0 wird **nach erfolgreicher Validierung und Befehlsregistrierung** auf Format 2 umgestellt. Vorher entsteht daneben `config-v1-*.backup.toml`. Eigene Server, Befehle, Aliase, Permissions, Zeiten und HTTP-Trigger bleiben erhalten. Die bisherigen Anzeigevorlagen werden durch das neue kompakte Layout ersetzt; eine eigene Auswahl einzelner Anzeigemodi bleibt erhalten. Die frühere Standardkombination dreier Anzeigen wird zu `TITLE`. Alte Kommentare bleiben in der Sicherung; die neue Datei verweist auf das kommentierte Beispiel.
 
-## Befehle
+Ein bisheriger Standardwert von drei Netzwerk-Wiederholungen wird auf 100 angehoben; abweichende eigene Werte bleiben erhalten. Alte Startprovider werden auf normale Verbindungsversuche vereinheitlicht. Bei ungültiger Datei oder fremden Befehlskonflikten findet keine Dateiumstellung statt. Bei einem gleichzeitigen externen Dateiedit wird die geänderte Datei nicht überschrieben.
 
-| Ziel-ID | Hauptbefehl | Aliase |
+## Wartezeit: Standard und Überschreibung je Server
+
+```toml
+[settings]
+expected-startup-seconds = 30
+max-wait-seconds = 180
+
+[servers.testserver]
+velocity-name = "testserver"
+display-name = "Testserver"
+command = "testserver"
+aliases = ["test"]
+expected-startup-seconds = 20
+```
+
+Hier zeigt Testserver eine 20-Sekunden-Schätzung. Ohne dessen `expected-startup-seconds` gilt der globale Standard von 30 Sekunden. Auch der globale Wert ist optional; ohne ihn gilt 30. Weitere Server benötigen keine Codeänderung.
+
+**Die Wartezeit ist eine Countdown-Schätzung.** Ein aufnahmebereiter Server wird sofort betreten, auch vor Ablauf der Schätzung und innerhalb des Befehlscooldowns. Der Countdown allein löst keine Verbindung aus. Läuft er ab, erscheint „Start dauert länger …“; keine negativen Sekunden. `max-wait-seconds` begrenzt unabhängig davon die tatsächliche Dauer eines Wunsches.
+
+Später hinzukommende Spieler sehen die verbleibende Schätzung desselben gemeinsamen Vorgangs. Ihre eigene maximale Wartefrist beginnt mit ihrem Wunsch.
+
+## Kompakte Anzeige und einmaliger Chattext
+
+Standardansicht:
+
+| Stelle | Standardtext |
+| --- | --- |
+| Titel, obere große Zeile | **Testserver Startet** |
+| Untertitel, kleinere Zeile darunter | **~23 Sekunden** |
+| Chat, einmal je angenommenem Wunsch | Sobald der Server antwortet, wirst du teleportiert. |
+
+Für Titel oder ausschließlich Bossbar wählen:
+
+```toml
+[display]
+modes = ["TITLE"]
+# Alternativ: modes = ["BOSSBAR"]
+wait-chat-enabled = true
+wait-chat = '<gray>Sobald der Server antwortet, wirst du teleportiert.</gray>'
+title = '<server> <gold>Startet</gold>'
+subtitle = '<gray>~<seconds> Sekunden</gray>'
+bossbar = '<server> startet <gray>| ~<seconds> s</gray>'
+```
+
+Der Chattext ist **unabhängig von der Modusauswahl**. Für beide Varianten kommt er einmalig; `CHAT` muss dafür nicht aktiviert sein. Abgewiesene Wiederholungen und Anzeige-Updates schicken ihn nicht erneut. `wait-chat-enabled = false` oder ein leerer `wait-chat` unterdrücken ihn.
+
+Alle Anzeigeeinstellungen lassen sich einzeln unter `[servers.<id>.display]` überschreiben. Beispielsweise kann Survival nur die Bossbar und Testserver nur den Titel verwenden. Weiterhin kombinierbar sind `BOSSBAR`, `TITLE`, `ACTIONBAR` und `CHAT`; `NONE` steht allein. `CHAT` bedeutet zusätzliche wiederholte Statusmeldungen im `chat-interval-seconds`-Abstand. `NONE` unterdrückt laufende Anzeigen; die separat aktivierte einmalige Erklärung bleibt möglich.
+
+Bossbar-Farbe und Unterteilung werden separat konfiguriert. Der Balken zeigt den verbleibenden Anteil der Schätzung, keinen gemessenen Boot-Fortschritt. Title-Einblendzeiten, Update-Intervall und alle Texte sind veränderbar.
+
+### Newline und Platzhalter
+
+Unterstützt werden **`<newline>`, `<newline/>`, `<br>`, echte Zeilenumbrüche und `\n`** in Konfigurationstexten. Beispiel:
+
+```toml
+[display]
+title = '<server> Startet<newline/>~<zeit> Sekunden'
+wait-chat = 'Sobald der Server antwortet, wirst du teleportiert.<newline/>Mit /servernavigator cancel kannst du abbrechen.'
+```
+
+Ein Umbruch im Titel wird auf die zwei tatsächlich vorhandenen Vanilla-Zeilen verteilt. Die zweite Inline-Zeile ersetzt dann die Vorlage `subtitle`. Alternativ `title` und `subtitle` getrennt konfigurieren; dies ist der Standard. Mehr als zwei Titelzeilen beziehungsweise mehr als eine explizite Untertitelzeile werden bei der Validierung abgelehnt.
+
+Chat unterstützt mehrere Zeilen. Bossbar und Actionbar sind technisch einzeilig; dort verbindet das Plugin Zeilenumbrüche mit Leerzeichen. Farben, Verläufe, Schriftarten und Textformatierung bleiben beim Aufteilen erhalten. Vanilla bietet keine frei skalierbare Title-Schriftgröße. Die mitgelieferte Textdarstellung benötigt kein Resourcepack; eigene Fonts/Glyphen können später über `<font:namespace:key>...</font>` eingesetzt werden.
+
+| Platzhalter | Inhalt |
+| --- | --- |
+| `<server>`, `<servername>` | konfigurierter Anzeigename |
+| `<seconds>`, `<zeit>` | geschätzte verbleibende Sekunden, nie negativ |
+| `<elapsed>` | Sekunden seit Beginn des gemeinsamen Vorgangs |
+| `<cooldown>` | verbleibender Befehlscooldown |
+| `<status>` | konfigurierter Status; innerhalb `status-*` selbst leer |
+| `<reason>` | originale Ablehnungsnachricht |
+| `<count>`, `<waiters>`, `<attempts>` | Wartende bzw. Versuche des betreffenden Spielers |
+
+MiniMessage-Tags müssen geschlossen sein; Platzhalter und Newline-Tags brauchen keine End-Tags. Dynamische Fremdtexte werden als Komponenten oder unformatierte Werte eingefügt, nicht als zusätzliche MiniMessage-Tags ausgewertet.
+
+## Verbindung und optionale Starttrigger
+
+Ohne `wake`-Block gilt **`CONNECTION`**: eine normale asynchrone Velocity-Anmeldung. Ein bereiter Server nimmt den Spieler direkt auf. Ein nicht erreichbarer Server wird bis zu den konfigurierten Grenzen erneut geprüft. Das benötigt keinen bestimmten Hoster, kein Panel und keine spezielle Startmeldung. Währenddessen bleibt der Spieler auf seinem bisherigen Backend.
+
+Ein Verbindungsversuch startet allein keinen Java-Prozess. Optional kann ein vorhandener externer Dienst auf Verbindungsversuche reagieren. Ein unabhängig gestartetes Backend wird ebenfalls automatisch betreten, sobald der echte Login gelingt.
+
+Alternativ ist ein allgemeiner HTTPS-POST-Trigger vollständig implementiert:
+
+```toml
+[servers.testserver.wake]
+type = "HTTP"
+url = "https://START-SERVICE-EXAMPLE.invalid/wake/testserver"
+token-environment = "SERVERNAVIGATOR_WAKE_TOKEN"
+body = '{"server":"testserver"}'
+```
+
+Die `.invalid`-URL ist ein absichtlich ungültiger Platzhalter. Eine echte HTTPS-URL zum eigenen Startdienst einsetzen. Der optionale Bearer-Token stammt aus der Umgebung des Proxys; der JSON-Body wird wörtlich gesendet. Nur 2xx bestätigt den Trigger, keine Redirects, keine POST-Wiederholung. Das ist kein angenommener oder eingebauter Panel-Endpunkt.
+
+`WakeupProvider` wird einmal je gemeinsamem Vorgang aufgerufen. Zusätzliche Spieler hängen sich an die Warteliste. `ReadinessChecker` verwendet echte asynchrone Logins: ein erfolgreicher Login verbindet den ersten Spieler und gibt danach die weiteren frei. Pings/offene TCP-Ports gelten nicht als Aufnahmebereitschaft. Es gibt keine Fake-Spieler und kein dauerhaftes Polling ohne Wünsche. Reale Folge-Logins können naturgemäß ebenfalls einen externen Wake-Dienst erreichen.
+
+Unbekannte echte Backend-Ablehnungen, Whitelist, volle Server, Wartung und Authentifizierungsfehler beenden den jeweiligen Wunsch mit verständlichem Originalgrund. Optionale `starting-patterns` erkennen allgemeine Startmeldungen; `terminal-patterns` haben Vorrang. Netzwerkfehler beweisen keinen Schlaf- oder Startzustand. Sie werden durch `network-retries`, `max-connection-attempts` und `max-wait-seconds` begrenzt; `network-retries = 0` beendet beim ersten Netzwerkfehler. Startantworten setzen den Zähler aufeinanderfolgender Netzwerkfehler zurück.
+
+## Befehle, Permissions und Cooldown
+
+| Ziel | Hauptbefehl | Aliase |
 | --- | --- | --- |
 | lobby | `/lobby` | `/l`, `/hub` |
 | challenges | `/challenges` | `/challenge`, `/ch` |
@@ -35,152 +134,41 @@ Die mitgelieferte [config.toml](src/main/resources/config.toml) ist vollständig
 | creative | `/creative` | `/cre` |
 | testserver | `/testserver` | `/test` |
 
-Alle Einträge sind konfigurierbar. Hauptbefehl und Aliase verwenden dieselbe Handler-Instanz und Ziel-Permission. Namen kleingeschrieben und ohne `/` angeben.
+| Verwaltung | Berechtigung |
+| --- | --- |
+| `/servernavigator cancel` | keine zusätzliche; kein Wechsel-Cooldown |
+| `/servernavigator status [server]` | `servernavigator.admin` |
+| `/servernavigator reload` | `servernavigator.admin` |
 
-| Befehl | Berechtigung | Wirkung |
-| --- | --- | --- |
-| `/servernavigator cancel` | keine zusätzliche | Eigenen Wunsch und Anzeigen entfernen; kein Wechsel-Cooldown |
-| `/servernavigator status [server]` | `servernavigator.admin` | Aktive Vorgänge, vergangene Zeit und Wartende |
-| `/servernavigator reload` | `servernavigator.admin` | Vollständig validierte Konfiguration samt Befehlen übernehmen |
+Hauptbefehle/Aliase sind konfigurierbar und teilen pro Ziel denselben Handler. Ein Spieler hat höchstens einen Wunsch. Nach Ablauf des gemeinsamen 15-Sekunden-Cooldowns ersetzt ein anderes Ziel den bisherigen Wunsch. Abgewiesene Wiederholungen verlängern keine Frist und setzen keine Anzeige zurück. Derselbe bereits vorgemerkte Wunsch wird nicht erneut angelegt.
 
-`status` ohne aktiven Wunsch sagt „kein aktiver Startvorgang“ statt „offline“. Es startet keinen Ping und hält keine Server wach. `cancel` bleibt auch bei Pflicht-Permissions zugänglich. Reload und Status funktionieren ebenfalls von der Konsole.
+Mit `settings.require-server-permissions = true` gilt standardmäßig `server.<server-id>`. Pro Server überschreiben `require-permission` und `permission` diese Vorgabe. Normale Velocity-Permission-Abfragen unterstützen etwa LuckPerms auf dem Proxy. `servernavigator.admin` umgeht Ziel-Permissions nicht.
 
-## AMP einrichten: Starttrigger und echte Bereitschaft
+`ServerPreConnectEvent` kontrolliert ursprüngliches und ausgewähltes Ziel, auch für `/server <name>` und andere Plugins. Der eingebaute Befehl wird nicht überschrieben und erhält keine Navigator-Warteliste. Seine eigene Permission gilt zusätzlich. Andere Proxy-Plugins müssen bereits verweigerte Verbindungen respektieren. Direkte Backend-Zugänge benötigen weiterhin korrektes Forwarding und Netzwerkzugriffsschutz.
 
-Dein AMP startet beim **Beitrittsversuch** und lehnt diesen zunächst mit einer Startmeldung ab. Dafür ist `wake.type = "AMP_LOGIN"` implementiert und für alle Ziele voreingestellt. Panel-Zugangsdaten werden nicht benötigt.
+## Bereinigung, Reload und API-Grenzen
 
-1. In jeder AMP-Minecraft-Instanz Sleep Mode aktivieren und den Wake-Modus auf Spielerbeitritt stellen, je nach AMP-Version etwa **When a user joins the server**. Nicht den Ping-Modus wählen. Die Velocity-Zieladresse muss zum AMP-Sleep-Listener führen, auch wenn das Backend schläft.
-2. Deine bestehenden **fünf Minuten Leerlauf nach dem letzten Spieler** und **zwei Minuten nach ungenutztem Aufwecken** in AMP belassen. Das Plugin verändert diese Timer nicht.
-3. Ein Testziel schlafen lassen und `/testserver` ausführen. Falls die Startmeldung als normale Ablehnung erscheint, ihren tatsächlichen Klartext mit `settings.starting-patterns` abgleichen und ein passendes enges Regex ergänzen. Deutsch/Englisch-Beispiele sind enthalten; die genaue Meldung hängt von AMP-Version und Sprache ab.
+Erfolg, Cancel, Disconnect, Timeout, unabhängiger erfolgreicher Wechsel und gültiger Reload entfernen Wunsch und eigene Anzeigen. Ohne Wartende wird der Task entfernt. Späte Futures können entwertete Wünsche nicht wiederaufnehmen oder Folgeanmeldungen auslösen. Ein vorhandenes, funktionierendes Backend bleibt bei Verbindungsfehlern Aufenthaltsort. Der initiale Proxy-Login benötigt einen erreichbaren Aufenthaltsserver; kein Limbo.
 
-`AmpLoginWakeupProvider` sendet eine **normale asynchrone Velocity-Verbindungsanfrage des berechtigten Spielers**. Ist das Ziel bereit, gelingt der Wechsel sofort. Schläft es, übernimmt AMP den Start. Weitere Spieler hängen sich an denselben Vorgang und senden in dieser Phase keinen zusätzlichen Erst-Starttrigger.
+Velocity bietet öffentlich keine garantierte Rücknahme eines schon zugelassenen Backend-Logins. Vor `ServerPreConnectEvent` verhindert der Generationsguard entwertete Anfragen. Nach diesem Ereignis kann ein bereits abgesendeter Login noch gelingen. Ein weiterer Versuch wird nicht über einen noch laufenden internen Versuch desselben Spielers gelegt. Es wird kein heimlicher Rückwechsel ausgeführt.
 
-`VelocityLoginReadinessChecker` prüft durch einen weiteren **echten Login des ersten berechtigten Wartenden**. Ein erfolgreicher Login ist gleichzeitig Bereitschaftsnachweis und Verbindung dieses Spielers. Anschließend werden die übrigen Wartenden sofort verbunden, jeweils mit erneuter Permission-Prüfung. Solange noch niemand aufgenommen wurde, läuft nur ein gemeinsamer Prüfversuch je Ziel.
+`attempt-timeout-ms` beendet einen nicht antwortenden Plugin-Versuch. HTTP nutzt zusätzlich echte Connect-/Request-Timeouts. Für Velocity-Anmeldungen außerdem `advanced.connection-timeout` und `advanced.read-timeout` in `velocity.toml` passend setzen; es gibt öffentlich keinen Socket-Timeout je einzelner Anfrage. Langsame Modded-Logins berücksichtigen.
 
-**Weder Ping noch offener TCP-Port gelten als Bereitschaft.** AMP kann Anfragen selbst beantworten. Stattdessen werden Kapazität, Whitelist, Wartung, Forwarding und echte Spieleraufnahme im regulären Login ausgewertet. Es gibt keine Probe-Bots. Die Prüfversuche sind reale Logins: falls AMP während des Wartens wieder einschläft, können sie naturgemäß erneut dessen Wake-Logik erreichen. Der konfigurierte WakeupProvider wird trotzdem nur einmal pro gemeinsamem Vorgang aufgerufen.
+Reload validiert erst Typen, Werte, Texte, Ziele und Befehlskonflikte; erst dann ersetzt er Snapshot und eigene Befehle. Fehlerhafte Registrierung stellt alte Befehle wieder her. Fremde Befehle werden nicht absichtlich entfernt. Andere Plugins dürfen währenddessen nicht dieselben Namen übernehmen. Ungültiger Reload erhält aktive Konfiguration und Wünsche.
 
-Sobald alle Wünsche enden, wird der Scheduler-Task entfernt. Kein Heartbeat hält ungenutzte Server wach. Ein bereits von AMP begonnener Start wird durch `cancel` nicht heruntergefahren; ohne Beitritt greift dein AMP-Timer. Für den ersten Proxy-Beitritt muss ein Aufenthaltsserver verfügbar sein: das Plugin ersetzt keinen initialen Login-/Fallback-Dienst.
+| Änderung | Erforderlich |
+| --- | --- |
+| Texte, Modi, Zeiten, Permissions, Befehle/Aliase vorhandener Ziele | Plugin-Konfigurationsreload |
+| Neues Backend, registrierter Zielname, IP oder Port | zuerst `velocity.toml` ändern und Proxy neu starten, danach Plugin-Konfiguration |
+| Neue Plugin-JAR oder Proxy-Socket-Timeouts | Proxy-Neustart |
+| Externer Startdienst | Dienst unabhängig einrichten; optionalen Trigger konfigurieren |
 
-### Fehler und begrenzte Wiederholungen
+## Build und Prüfungen
 
-- Nur eine zu `starting-patterns` passende Login-Ablehnung bestätigt einen AMP-Start.
-- `terminal-patterns` haben Vorrang: voll, Whitelist, Wartung, Ban, Versions- und Authentifizierungsfehler gelten nicht als Schlaf. Unbekannte Ablehnungen sind terminal; der originale Backend-Grund wird als Adventure-Komponente angezeigt.
-- Unbekannte Netzwerkfehler gelten nicht als Schlaf. Erst **nach bestätigter AMP-Startantwort** werden wenige aufeinanderfolgende Netzwerkfehler toleriert, etwa während AMP den Port an Java übergibt. Standard: drei. Eine weitere Startantwort setzt diesen Fehlerzähler zurück.
-- Zusätzlich begrenzen 100 Versuche pro Wunsch und 180 Sekunden Gesamtwartezeit den Ablauf. Der Erstversuch zählt mit.
-- Bei Fehlern bleibt der Spieler auf seinem weiterhin funktionierenden bisherigen Backend. Wird dieses unabhängig beendet, kann das Plugin dessen Verbindung nicht erhalten.
+Voraussetzungen: **Temurin JDK 25**, **Apache Maven 3.9.11**. `mvn -B -ntp clean verify` erzeugt `target/ServerNavigator-1.1.0.jar` und die Sources-JAR. TOML/ANTLR werden isoliert mitgeliefert; Velocity und Adventure stellt der Proxy bereit. Alle Abhängigkeiten und Maven-Plugins sind in `pom.xml` versioniert.
 
-### Timeouts und Abbruchgrenze der öffentlichen API
+Das Projekt enthält Konfigurationsvalidierung/-migration, synchronisierte Zustandsmaschine, austauschbare Provider, reine Darstellungsklassen sowie den Velocity-Adapter. Tests liegen unter `src/test/java/`; [VALIDIERUNG.md](docs/VALIDIERUNG.md) trennt ausgeführte Prüfungen von notwendigen Live-Tests.
 
-`attempt-timeout-ms` beendet einen nicht antwortenden Plugin-Versuch samt Wunsch; HTTP verwendet außerdem echte Connect-/Request-Timeouts. Velocity bietet über `ConnectionRequestBuilder` keinen je Anfrage einstellbaren Socket-Timeout und keine garantierte Rücknahme eines bereits laufenden Backend-Logins. Deshalb zusätzlich in **velocity.toml**, `[advanced]`, passende `connection-timeout`- und `read-timeout`-Werte in Millisekunden einstellen, beispielsweise 5000 und 10000. Die Plugin-Obergrenze mindestens passend zum erwarteten Login-Timeout wählen; langsame Modded-Logins berücksichtigen.
+GitHub Actions baut und testet vor der Veröffentlichung. Releases enthalten JAR, vollständiges Quellen-ZIP, Sources-JAR, Konfiguration, Testberichte, Builddaten und SHA-256-Prüfsummen. Vorhandene Releases werden nicht überschrieben.
 
-Abbruch/Ersetzung/Disconnect/Reload entwerten Wünsche sofort. Verspätete Futures lösen keine Folgeversuche oder Wiederaufnahme aus. Ein Guard in `ServerPreConnectEvent` verweigert entwertete Anfragen, bevor sie dieses Ereignis passieren. **Einen bereits darüber hinaus fortgeschrittenen Login kann die öffentliche API nicht garantiert stoppen.** In diesem engen Rennen kann ein schon abgesendeter Wechsel noch gelingen. Weitere Versuche werden nicht über den noch laufenden internen Versuch gelegt. Es erfolgt kein heimlicher zusätzlicher Rückwechsel. Diese Grenze wird ausdrücklich nicht als Rücknahmegarantie verkauft.
-
-## Permissions und `/server <name>`
-
-Standardmäßig sind Server-Permissions optional (`require-server-permissions = false`). Mit `true` ist grundsätzlich `server.<server-id>` erforderlich. Pro Server überschreiben `require-permission` und `permission` die Vorgabe. Ein eigener Node gilt für Hauptbefehl und sämtliche Aliase.
-
-Beispiel eines beschränkten Ziels:
-
-```toml
-[servers.testserver]
-velocity-name = "testserver"
-display-name = "Testserver"
-command = "testserver"
-aliases = ["test"]
-expected-startup-seconds = 30
-require-permission = true
-permission = "server.testserver"
-```
-
-LuckPerms auf dem Proxy nutzen und beispielsweise dessen Konsolenbefehle verwenden:
-
-```text
-lpv group default permission set server.lobby true
-lpv group member permission set server.survival true
-lpv group admin permission set servernavigator.admin true
-```
-
-Gruppennamen an dein Netzwerk anpassen. Das Plugin nutzt normale `Player.hasPermission()`-/`CommandSource.hasPermission()`-Abfragen. Es enthält keinen eigenen Permission-Provider und keinen impliziten Admin-Bypass für Ziel-Permissions.
-
-`ServerPreConnectEvent` wird mit `PostOrder.LAST` geprüft: ursprüngliches **und aktuell ausgewähltes** Ziel werden kontrolliert. Das schützt auch `/server <name>`, andere Plugins und die initiale Zielauswahl. Ohne Permission darf kein Login den Sleep-Listener erreichen. Die eigene Navigation prüft zusätzlich vor dem Starttrigger, vor jeder automatischen Verbindung und während des Wartens auf Permission-Entzug.
-
-Der eingebaute `/server`-Befehl wird **nicht überschrieben**; seine eigene Permission gilt zusätzlich. Er bekommt durch diese Zugriffskontrolle weder unsere Warteliste noch unseren Wechsel-Cooldown. Ein unabhängiger erfolgreicher Wechsel beendet einen alten Navigator-Wunsch. Direkte Backend-Zugänge benötigen weiterhin korrektes Forwarding und Netzwerkzugriffsschutz. Andere Proxy-Plugins gelten als vertrauenswürdig und dürfen eine verweigerte Verbindung nicht nachträglich freigeben.
-
-## Cooldown, Warteliste und Anzeigen
-
-Der Standard-Cooldown beträgt **15 Sekunden pro Spieler gemeinsam für alle Navigator-Ziele und Aliase**. Nur ein neu angenommener Wunsch setzt ihn. Abgewiesene Wiederholungen verändern weder Frist, Vorgang noch Anzeige. Nach Ablauf ersetzt ein anderes Ziel den alten Wunsch; dasselbe Ziel bestätigt ihn ohne Neustart. Die automatische Verbindung wartet nie auf den Cooldown. Cancel setzt einen laufenden Cooldown nicht zurück.
-
-Pro Ziel gibt es einen gemeinsamen Vorgang, pro Spieler höchstens einen Wunsch. Disconnect, Erfolg, Abbruch, unabhängiger Wechsel, gültiger Reload und Timeout entfernen Wunsch und eigene Anzeigen. Auch Tasks werden entfernt, sobald sie nicht mehr benötigt werden.
-
-`BOSSBAR`, `TITLE`, `ACTIONBAR`, `CHAT` können unabhängig kombiniert werden; `NONE` steht allein. Teilüberschreibungen unter `[servers.<id>.display]` erben alle übrigen globalen Werte. Bossbar-Farbe und Unterteilung verwenden die tatsächlich verfügbaren Adventure-Werte. Der Balken zeigt den **verbleibenden Anteil der geschätzten Startzeit**, keinen gemessenen Boot-Fortschritt.
-
-`expected-startup-seconds` gilt pro Server und ist ausdrücklich eine Schätzung. Hinzukommende sehen den verbleibenden Teil derselben Schätzung. Die maximale Wartefrist läuft für jeden Spieler ab seinem eigenen Wunsch. Nach Schätzungsende bleiben Sekunden bei null; separate `*-longer`-Vorlagen zeigen „Start dauert länger …“. Eine abgelaufene Schätzung gibt keinen Server frei.
-
-MiniMessage unterstützt Hexfarben und Verläufe; Tags müssen geschlossen sein. Platzhalter: `<server>`, `<seconds>`, `<elapsed>`, `<cooldown>`, `<status>`, zusätzlich `<reason>`, `<count>`, `<waiters>`, `<attempts>`. In `status-*` ist `<status>` selbst leer. Fremde Texte werden als Komponenten oder unformatierte Werte eingefügt. Vanilla-Title besitzt eine feste Schriftgröße. Die Standardtexte sind ohne Resourcepack nutzbar; spätere Pack-Glyphen können über `<font:meinpack:anzeigen>...</font>` eingebaut werden. Die gelieferte normale Textkonfiguration ist der Fallback.
-
-## Weitere Server und Reload
-
-Einen neuen `[servers.<id>]`-Block kopieren und eindeutige Befehle/Aliase vergeben. Codeänderungen sind nicht nötig.
-
-| Änderung | Plugin-Reload | Zusätzlich |
-| --- | --- | --- |
-| Texte, Farben, Modi, Schätzung, Permissions, Intervalle, Cooldown | ja | nichts |
-| Befehle/Aliase vorhandener Ziele | ja | Fremd-Konflikte auflösen |
-| Plugin-ID/Anzeigename bei gleichem Velocity-Ziel | ja | Standard-Permission bei ID-Wechsel beachten |
-| Neues Backend, registrierter Name, IP oder Port | danach ja | zuerst `[servers]` in `velocity.toml` ändern, Velocity neu starten |
-| Sleep-Timer oder Wake-Modus | ggf. Regex-Reload | in AMP ändern |
-| Proxy-Socket-Timeouts/Forwarding | ggf. Plugin-Frist ändern | Velocity-Konfiguration ändern, Proxy neu starten |
-
-Reload validiert zuerst Typen, Bereiche, Texte, Regex, eindeutige Aliase, registrierte Ziele und fremde Proxy-Befehle. Erst danach werden eigene Befehle neu registriert und der unveränderliche Snapshot ersetzt. Registrierungsfehler stellen alte eigene Befehle wieder her. Ein gültiger Reload beendet bestehende Wünsche mit Nachricht. Bei ungültiger Datei bleiben Snapshot und Wünsche aktiv. Die öffentliche Command-API bietet keine Transaktion über mehrere Befehle; synchrones Neuregistrieren mit Rollback setzt voraus, dass andere Plugins nicht gleichzeitig dieselben Namen übernehmen.
-
-## Optionaler HTTP-Startdienst und eigene Provider
-
-Für dein AMP-Sleep ist der Login-Provider fertig implementiert. Alternativ sendet `wake.type = "HTTP"` einen konfigurierten **HTTPS-POST** mit wörtlichem JSON-Body und optionalem Bearer-Token aus einer Umgebungsvariable. Pro Ziel eine vollständige URL angeben. Nur 2xx bestätigt den Trigger, keine Redirects, keine POST-Wiederholung. Endpunkt und Token werden nicht geloggt. Die Bereitschaft prüft weiterhin der echte Login.
-
-`https://AMP-BRIDGE-EXAMPLE.invalid/...` im Beispiel ist ein **absichtlich ungültiger Platzhalter**, kein angeblicher AMP-Endpunkt. Eine eigene Brücke muss zur installierten AMP-Version passende Anmeldung/API kapseln. Der generische POST behauptet nicht, eine AMP-Sitzungsverwaltung zu ersetzen; dein vorhandenes Sleep benötigt keinen HTTP-Dienst.
-
-Entwickler können `WakeupProvider` und `ReadinessChecker` implementieren und am Engine-Konstruktor verdrahten. Methoden liefern sofort `CompletionStage<AttemptResult>`, ohne blockierende Arbeit. Der `AttemptContext` enthält den Autorisierungs-/Generationsguard; unmittelbar vor Nebenwirkungen prüfen. `CONNECTED` bedeutet tatsächlich verbunden. Die Standardprovider sind vollständig implementiert.
-
-## Build und Tests
-
-Voraussetzungen: **Temurin JDK 25**, **Apache Maven 3.9.11**. Im Projektverzeichnis:
-
-```sh
-java -version
-mvn -version
-mvn -B -ntp clean verify
-```
-
-Ergebnis: `target/ServerNavigator-1.0.0.jar`, installierbar inklusive TOML-Parser. Velocity und Adventure stellt der Proxy bereit; sie werden nicht mitkopiert. Maven Shade isoliert TOML/ANTLR-Pakete. Abhängigkeiten und Maven-Plugins sind konkret in `pom.xml` versioniert. Der Build benötigt Maven Central und das offizielle PaperMC-Repository.
-
-```text
-pom.xml
-src/main/resources/{config.toml,velocity-plugin.json}
-src/main/java/io/github/etzewetze/servernavigator/
-  ServerNavigatorPlugin.java
-  config/       # Validierung und unveränderlicher Snapshot
-  core/         # Synchronisierte Zustandsmaschine, Fristen, Cooldown
-  provider/     # AMP-Login, echter Login-Check, HTTPS-POST
-  velocity/     # Adventure, Adapter und Befehlsregistrierung
-src/test/java/io/github/etzewetze/servernavigator/
-  NavigationEngineTest.java
-  ConfigurationTest.java
-  ClassifierAndMessagesTest.java
-  CommandRegistryTest.java
-docs/{RELEASE-1.0.0.md,VALIDIERUNG.md}
-.github/workflows/build-release.yml
-```
-
-Die Tests prüfen Cooldown, parallele Anfragen und genau einen Wake-Aufruf, Permission-Entzug, direkte Ziel-Zugriffskontrolle, Abbruch/Ersetzung, verspätete Futures, Event-vor-Future, Timeouts, Schätzungen, begrenzte Fehlerwiederholungen, Konfigurationsfehler und Befehls-Rollback. Nur der Test-Harness wartet auf Test-Threads. Der Plugin-Befehlsablauf enthält weder `Thread.sleep()` noch blockierende Future-Abfragen.
-
-Ausgeführte Prüfungen und notwendige Live-Tests: [VALIDIERUNG.md](docs/VALIDIERUNG.md). GitHub Actions baut mit Java 25, führt `verify` aus und veröffentlicht auf `main` nach Erfolg eine noch nicht vorhandene Versionsfreigabe mit JAR, Quellen, Konfiguration, Testbericht und SHA-256-Prüfsummen. Vorhandene Releases werden nicht überschrieben. Für Folgeversionen POM, Plugin-Metadaten und passende Release-Notizen gemeinsam aktualisieren.
-
-## Offizielle Grundlagen
-
-- [Velocity: Projekt und API](https://docs.papermc.io/velocity/dev/creating-your-first-plugin/)
-- [Velocity: ConnectionRequestBuilder](https://jd.papermc.io/velocity/4.1.0/com/velocitypowered/api/proxy/ConnectionRequestBuilder.html)
-- [Velocity: ServerPreConnectEvent](https://github.com/PaperMC/Velocity/blob/dev/3.0.0/api/src/main/java/com/velocitypowered/api/event/player/ServerPreConnectEvent.java)
-- [Velocity: Scheduler](https://docs.papermc.io/velocity/dev/scheduler-api/)
-- [Adventure: MiniMessage](https://docs.advntr.dev/minimessage/index.html)
-- [CubeCoders: AMP-Sleep-Prinzip](https://www.patreon.com/cubecoders/posts/universal-sleep-56709601)
-- [CubeCoders: Ping-/Join-Wake-Modus](https://github.com/CubeCoders/AMP/issues/795)
+Offizielle Grundlagen: [Velocity API](https://docs.papermc.io/velocity/dev/creating-your-first-plugin/), [Adventure MiniMessage einschließlich Newline](https://docs.papermc.io/adventure/minimessage/format/), [Adventure Title](https://jd.advntr.dev/api/latest/net/kyori/adventure/title/Title.html).

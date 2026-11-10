@@ -206,9 +206,10 @@ public final class NavigationEngine implements AutoCloseable {
             case CONNECTED -> connected(r);
             case STARTING -> { op.startingConfirmed = true; op.ready = false; r.networkFailures = 0; }
             case NETWORK_ERROR -> {
-                // Refused/reset connections during AMP's port handover are transient only AFTER
-                // a positive AMP-start response (or a successful HTTP trigger).
-                if (!op.startingConfirmed || ++r.networkFailures > config.transientRetries()) finish(r, "network-error", result.reason());
+                // An unavailable server is not evidence of sleep or a successful start. Keep
+                // waiting for it to answer, bounded by retries, total attempts and the deadline.
+                op.ready = false;
+                if (++r.networkFailures > config.networkRetries()) finish(r, "network-error", result.reason());
             }
             case REJECTED -> finish(r, "rejected", result.reason());
             case CANCELLED -> finish(r, "connection-cancelled", result.reason());
@@ -246,8 +247,8 @@ public final class NavigationEngine implements AutoCloseable {
     private Progress progress(Request r, long now) {
         Operation op = r.operation; long elapsed = Math.max(0, now - op.started);
         long left = Math.max(0, op.target.expectedStartup() - elapsed);
-        Progress.Phase phase = op.ready ? Progress.Phase.CONNECTING : !op.startingConfirmed ? Progress.Phase.CHECKING
-            : left == 0 ? Progress.Phase.LONGER : Progress.Phase.STARTING;
+        Progress.Phase phase = op.ready ? Progress.Phase.CONNECTING : left == 0 ? Progress.Phase.LONGER
+            : !op.startingConfirmed ? Progress.Phase.CHECKING : Progress.Phase.STARTING;
         return new Progress(op.target, ceilSeconds(left), elapsed / 1000, 0, phase,
             (float) Math.max(0, Math.min(1, (double) left / op.target.expectedStartup())), op.waiters.size(),
             String.join(", ", op.waiters.values().stream().map(v -> v.client.name()).toList()), r.attempts, Component.empty());

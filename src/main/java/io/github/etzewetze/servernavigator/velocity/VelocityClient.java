@@ -9,7 +9,7 @@ import io.github.etzewetze.servernavigator.config.NavigatorConfig.Mode;
 import io.github.etzewetze.servernavigator.core.AttemptResult;
 import io.github.etzewetze.servernavigator.core.NavigationClient;
 import io.github.etzewetze.servernavigator.core.Progress;
-import java.time.Duration;
+import io.github.etzewetze.servernavigator.presentation.WaitingPresentation;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -17,7 +17,6 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import net.kyori.adventure.bossbar.BossBar;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.title.Title;
 
 public final class VelocityClient implements NavigationClient {
     public record Permit(String target, long token, BooleanSupplier valid) { }
@@ -25,6 +24,7 @@ public final class VelocityClient implements NavigationClient {
     private final ProxyServer proxy;
     private final Supplier<NavigatorConfig> config;
     private final MessageRenderer renderer;
+    private final WaitingPresentation presentation;
     private final ConnectionClassifier classifier = new ConnectionClassifier();
     private volatile Permit permit;
     private BossBar bossbar;
@@ -33,6 +33,7 @@ public final class VelocityClient implements NavigationClient {
 
     public VelocityClient(Player player, ProxyServer proxy, Supplier<NavigatorConfig> config, MessageRenderer renderer) {
         this.player = player; this.proxy = proxy; this.config = config; this.renderer = renderer;
+        this.presentation = new WaitingPresentation(renderer);
     }
     public Permit permit() { return permit; }
     @Override public UUID id() { return player.getUniqueId(); }
@@ -71,6 +72,7 @@ public final class VelocityClient implements NavigationClient {
         }
     }
     @Override public void message(NavigatorConfig cfg, String key, Progress progress) {
+        if (key.equals("queued")) { presentation.initialChat(progress).ifPresent(player::sendMessage); return; }
         player.sendMessage(renderer.render(cfg.messages().get(key), progress));
     }
     @Override public synchronized void display(Progress p) {
@@ -79,15 +81,14 @@ public final class VelocityClient implements NavigationClient {
         if (d.modes().contains(Mode.NONE)) return;
         if (d.modes().contains(Mode.BOSSBAR)) {
             if (bossbar == null) {
-                bossbar = BossBar.bossBar(renderer.render(longer ? d.bossbarLonger() : d.bossbar(), p), p.fraction(), d.color(), d.overlay()); player.showBossBar(bossbar);
-            } else bossbar.name(renderer.render(longer ? d.bossbarLonger() : d.bossbar(), p)).progress(p.fraction()).color(d.color()).overlay(d.overlay());
+                bossbar = BossBar.bossBar(presentation.bossbar(p), p.fraction(), d.color(), d.overlay()); player.showBossBar(bossbar);
+            } else bossbar.name(presentation.bossbar(p)).progress(p.fraction()).color(d.color()).overlay(d.overlay());
         }
         if (d.modes().contains(Mode.TITLE)) {
-            player.showTitle(Title.title(renderer.render(longer ? d.titleLonger() : d.title(), p), renderer.render(d.subtitle(), p),
-                Title.Times.times(Duration.ofMillis(d.fadeIn()), Duration.ofMillis(d.stay()), Duration.ofMillis(d.fadeOut()))));
+            player.showTitle(presentation.title(p));
             ownTitle = true;
         }
-        if (d.modes().contains(Mode.ACTIONBAR)) { player.sendActionBar(renderer.render(longer ? d.actionbarLonger() : d.actionbar(), p)); ownActionbar = true; }
+        if (d.modes().contains(Mode.ACTIONBAR)) { player.sendActionBar(presentation.actionbar(p)); ownActionbar = true; }
         long now = System.nanoTime() / 1_000_000;
         if (d.modes().contains(Mode.CHAT) && (lastChat == Long.MIN_VALUE || now - lastChat >= d.chatInterval())) {
             player.sendMessage(renderer.render(longer ? d.chatLonger() : d.chat(), p)); lastChat = now;

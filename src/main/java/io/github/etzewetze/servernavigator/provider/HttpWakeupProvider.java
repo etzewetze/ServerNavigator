@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import net.kyori.adventure.text.Component;
 
-/** Optional explicit POST integration, e.g. a user-owned authenticated AMP bridge. */
+/** Optional explicit POST integration with an independently configured start service. */
 public final class HttpWakeupProvider implements WakeupProvider, AutoCloseable {
     private final HttpClient client;
     public HttpWakeupProvider(long timeout) {
