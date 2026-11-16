@@ -76,6 +76,29 @@ public final class ServerNavigatorPlugin {
             if (registry != null) registry.close(); if (http != null) http.close();
         }
     }
+
+    /** Stable optional integration API. Uses this plugin's queue, cooldown and permissions. */
+    public int serverHubApiVersion() { return 1; }
+    public boolean requestServer(Player player, String velocityName) {
+        NavigationEngine current = engine;
+        if (current == null || stopping) throw new IllegalStateException("ServerNavigator ist nicht bereit");
+        var target = current.config().byVelocityName(velocityName);
+        if (target == null) return false;
+        current.navigate(client(player), target.id());
+        return true;
+    }
+    /** IDLE does not claim that a server is online; it means no active navigation operation. */
+    public String navigationPhase(String velocityName) {
+        NavigationEngine current = engine;
+        if (current == null || stopping) return "UNAVAILABLE";
+        var values = current.status(velocityName);
+        return values.isEmpty() ? "UNMANAGED" : values.getFirst().phase().name();
+    }
+    public boolean isWaiting(UUID playerId) {
+        NavigationEngine current = engine;
+        return current != null && current.isWaiting(playerId);
+    }
+
     private ConfigLoader.Candidate load() throws IOException {
         return new ConfigLoader().loadCandidate(directory.resolve("config.toml"), name -> proxy.getServer(name).isPresent());
     }

@@ -252,4 +252,16 @@ class NavigationEngineTest {
         return new NavigatorConfig(c.cooldown(), c.pollInterval(), c.maxWait(), c.attemptTimeout(), c.maxAttempts(), c.networkRetries(),
             map, c.messages(), c.startingPatterns(), c.terminalPatterns());
     }
+
+    @Test void integrationWaitingStateTracksTheActualRequestInsteadOfTheCountdown() {
+        FakeClient player = new FakeClient();
+        assertFalse(engine.isWaiting(player.id()));
+        engine.navigate(player, "survival");
+        assertTrue(engine.isWaiting(player.id()));
+        player.futures.getFirst().complete(AttemptResult.of(STARTING));
+        assertTrue(engine.isWaiting(player.id()));
+        engine.cancel(player);
+        assertFalse(engine.isWaiting(player.id()));
+    }
+
 }

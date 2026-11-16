@@ -129,6 +129,7 @@ public final class NavigationEngine implements AutoCloseable {
         }
         return List.copyOf(list);
     }
+    public synchronized boolean isWaiting(UUID playerId) { return requests.containsKey(playerId); }
     public synchronized int pendingCount() { return requests.size(); }
     public synchronized void reload(NavigatorConfig replacement) {
         for (Request r : List.copyOf(requests.values())) finish(r, "reload-cancelled", null);

@@ -1,5 +1,15 @@
 # ServerNavigator
 
+## Integration mit ServerHub ab 1.2.0
+
+[ServerNavigator-1.2.0.jar](https://github.com/etzewetze/ServerNavigator/releases/download/v1.2.0/ServerNavigator-1.2.0.jar)
+
+ServerHub 2.4.0 kann Menü-Klicks über die öffentliche Plugin-Schnittstelle an ServerNavigator übergeben. Dabei gelten unverändert dessen Warteliste, Starttrigger, Countdown, maximale Wartefrist, Wiederholungen, Cooldowns und Ziel-Permissions. Es wird kein zusätzlicher direkter Login durch ServerHub gestartet. Der ServerHub-HUD-Hinweis pausiert während eines gemeldeten Verbindungswunsches.
+
+Die Schnittstelle ist optional: `serverHubApiVersion()`, `requestServer(Player, String velocityName)`, `navigationPhase(String velocityName)` und `isWaiting(UUID)`. Ein unbekanntes Ziel liefert bei requestServer false; bei einem verwalteten Ziel übernimmt ServerNavigator die gesamte Antwort einschließlich Ablehnungen. UNMANAGED/IDLE sind keine Online- oder Schlafdiagnose. CHECKING, STARTING, LONGER und CONNECTING beschreiben einen aktiven Vorgang. Eine nicht aktive Plugin-Instanz lehnt API-Anfragen ausdrücklich ab.
+
+Konfigurationsformat und bestehende Einstellungen bleiben erhalten. Die bisherige Anleitung folgt unverändert für den Funktionsstand 1.1.
+
 Unabhängiges Velocity-Plugin für einfache Serverwechsel, gemeinsame Wartelisten und konfigurierbare Adventure-Anzeigen. Es funktioniert mit dauerhaft laufenden Backends, manuell gestarteten Servern und optionalen externen Startdiensten. Die Plugin-JAR gehört ausschließlich auf den Proxy.
 
 Zielumgebung: **Velocity 4.3.2 Build 48 / Temurin 25**. Offizielle **Velocity API 4.3.0** und Adventure; keine Proxy-Interna. Die Java-Version der Backendserver ist für dieses Proxy-Plugin unerheblich.
