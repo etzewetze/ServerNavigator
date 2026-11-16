@@ -84,3 +84,27 @@ jobs:
           fi
           gh release create "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "ServerNavigator $VERSION" --notes-file "docs/RELEASE-$VERSION.md"
+
+      - name: Verify public release downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION=$(python3 -c 'import xml.etree.ElementTree as e; print(e.parse("pom.xml").findtext("{http://maven.apache.org/POM/4.0.0}version"))')
+          mkdir verified-release
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
+          for asset in "ServerNavigator-$VERSION.jar" "ServerNavigator-$VERSION-sources.jar" "ServerNavigator-$VERSION-source.zip" "ServerNavigator-$VERSION-test-reports.zip" config.toml BUILD.txt SHA256SUMS; do
+            curl --fail --location --retry 5 --retry-all-errors --connect-timeout 15 --max-time 120 \
+              --proto '=https' --proto-redir '=https' --output "verified-release/$asset" \
+              --write-out "$asset: HTTP %{http_code}, %{size_download} bytes\\n" "$base/$asset"
+          done
+          (cd verified-release && sha256sum --check SHA256SUMS)
+          python3 - <<'PY'
+          import glob, zipfile
+          jar=glob.glob('verified-release/ServerNavigator-*.jar')
+          jar=[p for p in jar if not p.endswith('-sources.jar')][0]
+          with zipfile.ZipFile(jar) as z:
+              assert 'io/github/etzewetze/servernavigator/ServerNavigatorPlugin.class' in z.namelist()
+              assert 'velocity-plugin.json' in z.namelist()
+          print('Public ServerNavigator release files verified')
+          PY
